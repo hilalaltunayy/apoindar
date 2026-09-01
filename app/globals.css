@@ -1,0 +1,83 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-headline: "Fraunces", Georgia, serif;
+    --font-body: "Inter", system-ui, sans-serif;
+    color-scheme: light;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-bg-cream text-ink-primary antialiased;
+    font-feature-settings: "cv11", "ss01";
+    min-height: 100dvh;
+  }
+
+  h1, h2, h3, h4 {
+    @apply font-serif text-ink-primary;
+    letter-spacing: -0.01em;
+  }
+
+  ::selection {
+    background: theme("colors.brand.yellow.200");
+    color: theme("colors.ink.primary");
+  }
+
+  :focus-visible {
+    outline: 2px solid theme("colors.brand.purple.600");
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+@layer components {
+  /* Soft educational wallpaper layer. Stronger on public pages (data-motif="loud"),
+     quieter on dashboards (data-motif="quiet"). 07 §6. */
+  .motif-field {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-color: theme("colors.bg.cream");
+  }
+  .motif-field[data-motif="loud"] {
+    opacity: 0.5;
+  }
+  .motif-field[data-motif="quiet"] {
+    opacity: 0.22;
+  }
+
+  /* Branded skeleton — cream/lavender, breathing shimmer, never flat gray. 07 §15.3 */
+  .apoindar-skeleton {
+    background-image: linear-gradient(
+      100deg,
+      theme("colors.brand.lavender.100") 20%,
+      theme("colors.surface.muted") 40%,
+      theme("colors.brand.lavender.100") 60%
+    );
+    background-size: 480px 100%;
+    background-repeat: no-repeat;
+    @apply animate-shimmer rounded-md;
+  }
+
+  .card-surface {
+    @apply rounded-lg border border-line-soft bg-surface-base shadow-soft;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
