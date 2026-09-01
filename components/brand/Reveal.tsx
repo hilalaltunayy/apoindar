@@ -25,6 +25,12 @@ export function Reveal({
       setShown(true);
       return;
     }
+    // Already on screen at mount → reveal now (above-the-fold content).
+    const rect = el.getBoundingClientRect();
+    if (rect.top < window.innerHeight && rect.bottom > 0) {
+      setShown(true);
+      return;
+    }
     const io = new IntersectionObserver(
       ([entry]) => {
         if (entry?.isIntersecting) {
@@ -32,10 +38,15 @@ export function Reveal({
           io.disconnect();
         }
       },
-      { threshold: 0.15, rootMargin: "0px 0px -8% 0px" },
+      { threshold: 0.1, rootMargin: "0px 0px -6% 0px" },
     );
     io.observe(el);
-    return () => io.disconnect();
+    // Safety net: never leave content invisible.
+    const t = setTimeout(() => setShown(true), 1200);
+    return () => {
+      io.disconnect();
+      clearTimeout(t);
+    };
   }, []);
 
   return (
