@@ -23,10 +23,14 @@ import {
   refundSchema,
 } from "@/lib/validation/schemas";
 
-export type ActionResult = { ok: true; message?: string } | { ok: false; error: string };
+export type ActionResult =
+  | { ok: true; message?: string; data?: Record<string, number | string> }
+  | { ok: false; error: string; code?: string };
 
 function fail(err: unknown): ActionResult {
-  if (err instanceof AuthorizationError) return { ok: false, error: err.message };
+  if (err instanceof AuthorizationError) {
+    return { ok: false, error: err.message, code: err.code };
+  }
   return { ok: false, error: (err as Error).message || "Something went wrong." };
 }
 
@@ -47,7 +51,7 @@ export async function saveProviderProfileAction(
     deliveryMode: formData.get("deliveryMode"),
     yearsExperience: formData.get("yearsExperience") || undefined,
   });
-  if (!parsed.success) return { ok: false, error: "Please check the highlighted fields." };
+  if (!parsed.success) return { ok: false, error: "Validation failed", code: "VALIDATION" };
 
   try {
     const cats = await prisma.educationCategory.findMany({
@@ -87,7 +91,7 @@ export async function publishProviderAction(): Promise<ActionResult> {
     where: { providerId: provider.id, status: "ACTIVE" },
   });
   if (activeListings < 1) {
-    return { ok: false, error: "Add at least one active lesson or package before publishing." };
+    return { ok: false, error: "Needs a listing", code: "PUBLISH_NEEDS_LISTING" };
   }
   await prisma.provider.update({
     where: { id: provider.id },
@@ -129,8 +133,13 @@ export async function createListingAction(
   }
 }
 
-export async function toggleListingAction(listingId: string, active: boolean): Promise<ActionResult> {
+export async function toggleListingAction(
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
   const { user } = await requireProvider();
+  const listingId = formData.get("listingId") as string;
+  const active = formData.get("active") === "true";
   try {
     await setListingActive(listingId, user.id, active);
     revalidatePath("/provider/listings");
@@ -153,7 +162,7 @@ export async function addStudentAction(
     phone: formData.get("phone") || "",
     labelColor: formData.get("labelColor") || undefined,
   });
-  if (!parsed.success) return { ok: false, error: "Please check the student details." };
+  if (!parsed.success) return { ok: false, error: "Validation failed", code: "VALIDATION" };
   try {
     await addStudent(provider.id, user.id, parsed.data);
     revalidatePath("/provider/students");
@@ -164,10 +173,12 @@ export async function addStudentAction(
 }
 
 export async function setStudentStatusAction(
-  studentId: string,
-  status: "ACTIVE" | "INACTIVE" | "FORMER",
+  _prev: ActionResult | null,
+  formData: FormData,
 ): Promise<ActionResult> {
   const { user } = await requireProvider();
+  const studentId = formData.get("studentId") as string;
+  const status = formData.get("status") as "ACTIVE" | "INACTIVE" | "FORMER";
   try {
     await setStudentStatus(studentId, user.id, status);
     revalidatePath("/provider/students");
@@ -183,17 +194,17 @@ export async function addStudentNoteAction(
 ): Promise<ActionResult> {
   const { user, provider, entitlements } = await requireProvider();
   if (!entitlements.advancedCrm) {
-    return { ok: false, error: "Private notes are a Premium feature." };
+    return { ok: false, error: "Premium feature", code: "PREMIUM_FEATURE" };
   }
   const studentId = formData.get("studentId") as string;
   const body = (formData.get("body") as string)?.trim();
-  if (!studentId || !body) return { ok: false, error: "Write a note first." };
+  if (!studentId || !body) return { ok: false, error: "Empty note", code: "WRITE_NOTE" };
   try {
     const student = await prisma.studentProfile.findFirst({
       where: { id: studentId, providerId: provider.id },
       select: { id: true },
     });
-    if (!student) return { ok: false, error: "Student not found." };
+    if (!student) return { ok: false, error: "Student not found", code: "NOT_FOUND" };
     await prisma.studentNote.create({ data: { studentId, providerId: provider.id, body } });
     void user;
     revalidatePath("/provider/students");
@@ -223,7 +234,7 @@ export async function addAvailabilityAction(
         endsAt: { gt: parsed.data.startsAt },
       },
     });
-    if (clash) return { ok: false, error: "That overlaps an existing slot." };
+    if (clash) return { ok: false, error: "Overlap", code: "SLOT_OVERLAP" };
     await prisma.availabilitySlot.create({
       data: { providerId: provider.id, startsAt: parsed.data.startsAt, endsAt: parsed.data.endsAt },
     });
@@ -240,8 +251,8 @@ export async function deleteAvailabilityAction(slotId: string): Promise<ActionRe
     const slot = await prisma.availabilitySlot.findFirst({
       where: { id: slotId, providerId: provider.id },
     });
-    if (!slot) return { ok: false, error: "Slot not found." };
-    if (slot.isBooked) return { ok: false, error: "That slot is booked." };
+    if (!slot) return { ok: false, error: "Not found", code: "NOT_FOUND" };
+    if (slot.isBooked) return { ok: false, error: "Booked", code: "SLOT_BOOKED" };
     await prisma.availabilitySlot.delete({ where: { id: slotId } });
     revalidatePath("/provider/calendar");
     return { ok: true };
@@ -264,13 +275,13 @@ export async function createRecurringLessonAction(
     startDate: formData.get("startDate"),
     occurrences: formData.get("occurrences"),
   });
-  if (!parsed.success) return { ok: false, error: "Please check the recurrence details." };
+  if (!parsed.success) return { ok: false, error: "Validation failed", code: "VALIDATION" };
   try {
     const res = await createRecurringLesson(provider.id, user.id, parsed.data);
     revalidatePath("/provider/calendar");
     return {
       ok: true,
-      message: `Created ${res.generated} lessons${res.skippedForConflict ? ` (${res.skippedForConflict} skipped for conflicts)` : ""}.`,
+      data: { generated: res.generated, skipped: res.skippedForConflict },
     };
   } catch (err) {
     return fail(err);
@@ -288,7 +299,7 @@ export async function subscribeAction(
     interval: formData.get("interval"),
     mode: formData.get("mode") ?? "trial",
   });
-  if (!parsed.success) return { ok: false, error: "Choose a plan." };
+  if (!parsed.success) return { ok: false, error: "Validation failed", code: "VALIDATION" };
   try {
     if (parsed.data.mode === "trial") {
       await beginTrial(provider.id, user.id, parsed.data.interval);
@@ -328,7 +339,7 @@ export async function refundBookingAction(
     amount: Number.isFinite(amountMajor) ? Math.round(amountMajor * 100) : NaN,
     reason: formData.get("reason") || undefined,
   });
-  if (!parsed.success) return { ok: false, error: "Enter a valid refund amount." };
+  if (!parsed.success) return { ok: false, error: "Invalid refund", code: "VALID_REFUND" };
   try {
     await refundPayment({ ...parsed.data, actor: { userId: user.id, role: "PROVIDER" } });
     revalidatePath("/provider/bookings");

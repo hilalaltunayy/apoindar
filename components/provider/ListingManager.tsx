@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useState, useTransition } from "react";
+import { useActionState, useState } from "react";
+import { useTranslations } from "next-intl";
 import { createListingAction, toggleListingAction, type ActionResult } from "@/lib/actions/provider";
 import { Button } from "@/components/ui/Button";
 import { Input, Select, Textarea, FormField } from "@/components/ui/Field";
@@ -8,6 +9,8 @@ import { Badge } from "@/components/ui/Badge";
 import { Disclosure } from "@/components/ui/Disclosure";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { formatMoney } from "@/lib/money";
+import { statusLabel } from "@/lib/i18n/labels";
+import { useActionError } from "@/lib/i18n/action-error";
 
 interface ListingRow {
   id: string;
@@ -21,14 +24,14 @@ interface ListingRow {
   bookings: number;
 }
 
-const CATEGORIES = [
-  ["", "No category"],
-  ["academic", "Academic"],
-  ["languages", "Languages"],
-  ["sports", "Sports"],
-  ["music", "Music"],
-  ["art-design", "Art & Design"],
-  ["exam-prep", "Exam Preparation"],
+const CATEGORY_SLUGS = [
+  "",
+  "academic",
+  "languages",
+  "sports",
+  "music",
+  "art-design",
+  "exam-prep",
 ] as const;
 
 export function ListingManager({
@@ -40,10 +43,15 @@ export function ListingManager({
   canActivateMore: boolean;
   planLabel: string;
 }) {
+  const t = useTranslations("listings");
+  const common = useTranslations("common");
+  const tn = useTranslations("categoriesPage.names");
+  const st = useTranslations("statusLabels");
   const [state, action, pending] = useActionState<ActionResult | null, FormData>(
     createListingAction,
     null,
   );
+  const errText = useActionError();
   const [kind, setKind] = useState<"SINGLE_LESSON" | "PACKAGE">("SINGLE_LESSON");
 
   return (
@@ -58,15 +66,20 @@ export function ListingManager({
               <div>
                 <div className="flex items-center gap-2">
                   <p className="font-medium">{l.title}</p>
-                  <Badge tone={l.status === "ACTIVE" ? "success" : l.status === "DRAFT" ? "yellow" : "neutral"}>
-                    {l.status.toLowerCase()}
+                  <Badge
+                    tone={l.status === "ACTIVE" ? "success" : l.status === "DRAFT" ? "yellow" : "neutral"}
+                  >
+                    {statusLabel(l.status, st)}
                   </Badge>
                   <Badge tone="neutral">
-                    {l.kind === "PACKAGE" ? `${l.lessonCount}-lesson package` : "Single lesson"}
+                    {l.kind === "PACKAGE"
+                      ? t("packageLabel", { count: l.lessonCount })
+                      : common("singleLesson")}
                   </Badge>
                 </div>
                 <p className="mt-0.5 text-xs text-ink-tertiary">
-                  {formatMoney(l.priceAmount, l.currency)} · {l.durationMin} min · {l.bookings} bookings
+                  {formatMoney(l.priceAmount, l.currency)} · {l.durationMin} {common("minutes")} ·{" "}
+                  {t("bookingsCount", { count: l.bookings })}
                 </p>
               </div>
               <ToggleButton id={l.id} active={l.status === "ACTIVE"} canActivate={canActivateMore} />
@@ -74,12 +87,12 @@ export function ListingManager({
           ))}
         </ul>
       ) : (
-        <EmptyState glyph="📋" title="No lessons or packages yet" description="Create your first offer below." />
+        <EmptyState glyph="📋" title={t("noneTitle")} description={t("noneBody")} />
       )}
 
-      <Disclosure label="+ Create a lesson or package" defaultOpen={!listings.length}>
+      <Disclosure label={t("createCta")} defaultOpen={!listings.length}>
         <form action={action} className="space-y-4">
-          <FormField label="Type">
+          <FormField label={t("type")}>
             {(p) => (
               <Select
                 {...p}
@@ -87,53 +100,57 @@ export function ListingManager({
                 value={kind}
                 onChange={(e) => setKind(e.target.value as typeof kind)}
               >
-                <option value="SINGLE_LESSON">Single lesson</option>
-                <option value="PACKAGE">Package (multiple lessons)</option>
+                <option value="SINGLE_LESSON">{t("typeSingle")}</option>
+                <option value="PACKAGE">{t("typePackage")}</option>
               </Select>
             )}
           </FormField>
-          <FormField label="Title" required>
-            {(p) => <Input {...p} name="title" required placeholder="e.g. 1-on-1 Physics lesson" />}
+          <FormField label={t("fieldTitle")} required>
+            {(p) => <Input {...p} name="title" required placeholder={t("titlePlaceholder")} />}
           </FormField>
-          <FormField label="Description">
-            {(p) => <Textarea {...p} name="description" placeholder="What students can expect…" />}
+          <FormField label={t("description")}>
+            {(p) => <Textarea {...p} name="description" placeholder={t("descPlaceholder")} />}
           </FormField>
           <div className="grid grid-cols-2 gap-3">
-            <FormField label="Price (₺)" required>
-              {(p) => <Input {...p} name="priceAmount" type="number" min={1} step={10} required />}
+            <FormField label={t("price")} required>
+              {(p) => <Input {...p} name="priceAmount" type="number" min={0} step={10} required />}
             </FormField>
-            <FormField label="Duration (min)" required>
-              {(p) => <Input {...p} name="durationMin" type="number" min={15} max={480} defaultValue={60} required />}
+            <FormField label={t("duration")} required>
+              {(p) => (
+                <Input {...p} name="durationMin" type="number" min={15} max={480} defaultValue={60} required />
+              )}
             </FormField>
           </div>
           {kind === "PACKAGE" ? (
             <div className="grid grid-cols-2 gap-3">
-              <FormField label="Lessons in package" required>
-                {(p) => <Input {...p} name="lessonCount" type="number" min={2} max={100} defaultValue={8} required />}
+              <FormField label={t("lessonsInPackage")} required>
+                {(p) => (
+                  <Input {...p} name="lessonCount" type="number" min={2} max={100} defaultValue={8} required />
+                )}
               </FormField>
-              <FormField label="Package terms">
-                {(p) => <Input {...p} name="packageTerms" placeholder="Use within 3 months" />}
+              <FormField label={t("packageTerms")}>
+                {(p) => <Input {...p} name="packageTerms" placeholder={t("termsPlaceholder")} />}
               </FormField>
             </div>
           ) : (
             <input type="hidden" name="lessonCount" value={1} />
           )}
           <div className="grid grid-cols-2 gap-3">
-            <FormField label="Format">
+            <FormField label={t("format")}>
               {(p) => (
                 <Select {...p} name="deliveryMode" defaultValue="BOTH">
-                  <option value="ONLINE">Online</option>
-                  <option value="IN_PERSON">In person</option>
-                  <option value="BOTH">Both</option>
+                  <option value="ONLINE">{common("online")}</option>
+                  <option value="IN_PERSON">{common("inPerson")}</option>
+                  <option value="BOTH">{common("onlineAndInPerson")}</option>
                 </Select>
               )}
             </FormField>
-            <FormField label="Category">
+            <FormField label={t("category")}>
               {(p) => (
                 <Select {...p} name="categorySlug" defaultValue="">
-                  {CATEGORIES.map(([v, l]) => (
-                    <option key={v} value={v}>
-                      {l}
+                  {CATEGORY_SLUGS.map((slug) => (
+                    <option key={slug || "none"} value={slug}>
+                      {slug === "" ? t("noCategory") : tn(slug)}
                     </option>
                   ))}
                 </Select>
@@ -141,32 +158,30 @@ export function ListingManager({
             </FormField>
           </div>
           <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" name="activate" defaultChecked={canActivateMore} disabled={!canActivateMore} />
-            Publish immediately
+            <input
+              type="checkbox"
+              name="activate"
+              defaultChecked={canActivateMore}
+              disabled={!canActivateMore}
+            />
+            {t("publishNow")}
             {!canActivateMore ? (
-              <span className="text-xs text-ink-tertiary">({planLabel} — save as draft, upgrade to activate more)</span>
+              <span className="text-xs text-ink-tertiary">{t("draftHint", { plan: planLabel })}</span>
             ) : null}
           </label>
 
-          <PriceHint />
+          <p className="text-xs text-ink-tertiary">{t("priceHint")}</p>
 
-          {state && !state.ok ? <p className="text-sm text-state-danger">{state.error}</p> : null}
-          {state?.ok ? <p className="text-sm text-state-success">{state.message}</p> : null}
+          {state && !state.ok ? (
+            <p className="text-sm text-state-danger">{errText(state)}</p>
+          ) : null}
+          {state?.ok ? <p className="text-sm text-state-success">{t("created")}</p> : null}
           <Button type="submit" disabled={pending}>
-            {pending ? "Saving…" : "Create"}
+            {pending ? common("saving") : common("create")}
           </Button>
         </form>
       </Disclosure>
     </div>
-  );
-}
-
-/** Price is entered in whole ₺; the server expects minor units. Convert on submit. */
-function PriceHint() {
-  return (
-    <p className="text-xs text-ink-tertiary">
-      Enter the price in whole Turkish lira. Students pay exactly this — Apoindar adds no fee for them.
-    </p>
   );
 }
 
@@ -179,28 +194,30 @@ function ToggleButton({
   active: boolean;
   canActivate: boolean;
 }) {
-  const [pending, start] = useTransition();
-  const [error, setError] = useState<string | null>(null);
+  const t = useTranslations("listings");
+  const errText = useActionError();
+  const [state, action, pending] = useActionState<ActionResult | null, FormData>(
+    toggleListingAction,
+    null,
+  );
   return (
-    <div className="flex shrink-0 flex-col items-end gap-1">
+    <form action={action} className="flex shrink-0 flex-col items-end gap-1">
+      <input type="hidden" name="listingId" value={id} />
+      <input type="hidden" name="active" value={String(!active)} />
       <button
+        type="submit"
         disabled={pending || (!active && !canActivate)}
-        onClick={() =>
-          start(async () => {
-            setError(null);
-            const res = await toggleListingAction(id, !active);
-            if (!res.ok) setError(res.error);
-          })
-        }
         className={`rounded-pill px-3 py-1.5 text-xs font-semibold ${
           active
             ? "border border-line-soft text-ink-secondary"
             : "bg-brand-yellow-500 text-ink-primary disabled:opacity-50"
         }`}
       >
-        {pending ? "…" : active ? "Deactivate" : "Activate"}
+        {pending ? "…" : active ? t("deactivate") : t("activate")}
       </button>
-      {error ? <span className="max-w-[12rem] text-right text-xs text-state-danger">{error}</span> : null}
-    </div>
+      {state && !state.ok ? (
+        <span className="max-w-[14rem] text-right text-xs text-state-danger">{errText(state)}</span>
+      ) : null}
+    </form>
   );
 }

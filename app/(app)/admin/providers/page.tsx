@@ -1,17 +1,26 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { requireAdmin } from "@/lib/authz-admin";
 import { prisma } from "@/lib/prisma";
 import { safeQuery } from "@/lib/data/safe";
 import { Badge } from "@/components/ui/Badge";
 import { ModerateButtons } from "@/components/admin/ModerateButtons";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { statusLabel } from "@/lib/i18n/labels";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Admin · Providers" };
+
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("admin");
+  return { title: `${t("metaTitle")} · ${t("navProviders")}` };
+}
 
 export default async function AdminProvidersPage() {
   await requireAdmin();
+  const t = await getTranslations("admin");
+  const common = await getTranslations("common");
+  const st = await getTranslations("statusLabels");
   const providers = await safeQuery(
     () =>
       prisma.provider.findMany({
@@ -28,20 +37,20 @@ export default async function AdminProvidersPage() {
   return (
     <div className="space-y-6">
       <Link href="/admin" className="text-sm text-brand-purple-700 hover:underline">
-        ← Admin
+        ← {t("backToAdmin")}
       </Link>
-      <h1 className="text-2xl">Providers</h1>
+      <h1 className="text-2xl">{t("providers")}</h1>
       {providers.length ? (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[720px] text-sm">
             <thead className="border-b border-line-soft text-left text-ink-tertiary">
               <tr>
-                <th className="py-2 pr-4">Name</th>
-                <th className="py-2 pr-4">Email</th>
-                <th className="py-2 pr-4">Plan</th>
-                <th className="py-2 pr-4">Moderation</th>
-                <th className="py-2 pr-4">L / B / S</th>
-                <th className="py-2">Action</th>
+                <th className="py-2 pr-4">{t("colName")}</th>
+                <th className="py-2 pr-4">{t("colEmail")}</th>
+                <th className="py-2 pr-4">{t("colPlan")}</th>
+                <th className="py-2 pr-4">{t("colModeration")}</th>
+                <th className="py-2 pr-4">{t("colLBS")}</th>
+                <th className="py-2">{t("colAction")}</th>
               </tr>
             </thead>
             <tbody>
@@ -54,7 +63,9 @@ export default async function AdminProvidersPage() {
                   </td>
                   <td className="py-2.5 pr-4 text-ink-secondary">{p.user.email}</td>
                   <td className="py-2.5 pr-4">
-                    <Badge tone={p.plan === "PREMIUM" ? "purple" : "neutral"}>{p.plan}</Badge>
+                    <Badge tone={p.plan === "PREMIUM" ? "purple" : "neutral"}>
+                      {p.plan === "PREMIUM" ? common("premium") : common("free")}
+                    </Badge>
                   </td>
                   <td className="py-2.5 pr-4">
                     <Badge
@@ -66,7 +77,7 @@ export default async function AdminProvidersPage() {
                             : "yellow"
                       }
                     >
-                      {p.moderationStatus.toLowerCase()}
+                      {statusLabel(p.moderationStatus, st)}
                     </Badge>
                   </td>
                   <td className="py-2.5 pr-4 text-ink-tertiary">
@@ -85,7 +96,7 @@ export default async function AdminProvidersPage() {
           </table>
         </div>
       ) : (
-        <EmptyState glyph="🗃️" title="No providers yet" />
+        <EmptyState glyph="🗃️" title={t("noProviders")} />
       )}
     </div>
   );

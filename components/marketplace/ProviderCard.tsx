@@ -1,12 +1,13 @@
 import Link from "next/link";
 import Image from "next/image";
+import { getTranslations } from "next-intl/server";
 import type { ProviderCardData } from "@/lib/data/discovery";
 import { Badge } from "@/components/ui/Badge";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/cn";
 
-function modeLabel(mode: ProviderCardData["deliveryMode"]) {
-  return mode === "ONLINE" ? "Online" : mode === "IN_PERSON" ? "In person" : "Online & in person";
+function modeLabelKey(mode: ProviderCardData["deliveryMode"]) {
+  return mode === "ONLINE" ? "online" : mode === "IN_PERSON" ? "inPerson" : "onlineAndInPerson";
 }
 
 /**
@@ -14,17 +15,20 @@ function modeLabel(mode: ProviderCardData["deliveryMode"]) {
  * colored backdrop shape behind the portrait, soft depth, the image lifts
  * slightly outside the frame. Shared-transition anchor via view-transition-name.
  */
-export function ProviderCard({
+export async function ProviderCard({
   provider,
   priority = false,
 }: {
   provider: ProviderCardData;
   priority?: boolean;
 }) {
+  const t = await getTranslations("search");
+  const common = await getTranslations("common");
+
   const location =
     provider.city && provider.district
       ? `${provider.district}, ${provider.city}`
-      : (provider.city ?? modeLabel(provider.deliveryMode));
+      : (provider.city ?? common(modeLabelKey(provider.deliveryMode)));
 
   return (
     <Link
@@ -56,13 +60,13 @@ export function ProviderCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h3 className="truncate font-serif text-base font-semibold">{provider.displayName}</h3>
-            {provider.plan === "PREMIUM" ? <Badge tone="purple">Premium</Badge> : null}
+            {provider.plan === "PREMIUM" ? <Badge tone="purple">{common("premium")}</Badge> : null}
           </div>
           {provider.headline ? (
             <p className="mt-0.5 line-clamp-2 text-sm text-ink-secondary">{provider.headline}</p>
           ) : null}
           <p className="mt-1 text-xs text-ink-tertiary">
-            {provider.categories.slice(0, 2).join(" · ") || "Teacher"} • {location}
+            {provider.categories.slice(0, 2).join(" · ") || common("teacher")} • {location}
           </p>
         </div>
       </div>
@@ -71,13 +75,13 @@ export function ProviderCard({
         <span className="text-sm">
           {provider.startingPrice != null ? (
             <>
-              <span className="text-ink-tertiary">from </span>
+              <span className="text-ink-tertiary">{common("from")} </span>
               <span className="font-semibold">
                 {formatMoney(provider.startingPrice, provider.currency)}
               </span>
             </>
           ) : (
-            <span className="text-ink-tertiary">Ask for pricing</span>
+            <span className="text-ink-tertiary">{t("askForPricing")}</span>
           )}
         </span>
         <span
@@ -86,7 +90,7 @@ export function ProviderCard({
             "transition-colors duration-250 group-hover:bg-brand-purple-600 group-hover:text-white",
           )}
         >
-          View profile
+          {t("viewProfile")}
         </span>
       </div>
     </Link>

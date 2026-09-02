@@ -1,12 +1,19 @@
 import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
 import { requireProvider } from "@/lib/authz";
 import { providerListings } from "@/lib/data/provider";
 import { ListingManager } from "@/components/provider/ListingManager";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Lessons & packages" };
+
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("listings");
+  return { title: t("metaTitle") };
+}
 
 export default async function ProviderListingsPage() {
+  const t = await getTranslations("listings");
+  const common = await getTranslations("common");
   const { provider, plan, entitlements } = await requireProvider();
   const listings = await providerListings(provider.id);
   const activeCount = listings.filter((l) => l.status === "ACTIVE").length;
@@ -15,11 +22,9 @@ export default async function ProviderListingsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl">Lessons &amp; packages</h1>
+        <h1 className="text-2xl">{t("title")}</h1>
         <p className="text-sm text-ink-secondary">
-          {plan === "FREE"
-            ? "Free plan: 1 active listing. Extra listings stay as drafts until you upgrade."
-            : "Premium: unlimited active listings."}
+          {plan === "FREE" ? t("subtitleFree") : t("subtitlePremium")}
         </p>
       </div>
       <ListingManager
@@ -35,7 +40,7 @@ export default async function ProviderListingsPage() {
           bookings: l._count.bookings,
         }))}
         canActivateMore={canActivateMore}
-        planLabel={plan === "FREE" ? "Free plan" : "Premium"}
+        planLabel={plan === "FREE" ? common("free") : common("premium")}
       />
     </div>
   );

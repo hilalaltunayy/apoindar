@@ -2,6 +2,7 @@
 
 import { useActionState, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import {
   saveProviderProfileAction,
   publishProviderAction,
@@ -9,15 +10,9 @@ import {
 } from "@/lib/actions/provider";
 import { Button } from "@/components/ui/Button";
 import { Input, Textarea, Select, FormField } from "@/components/ui/Field";
+import { useActionError } from "@/lib/i18n/action-error";
 
-const CATEGORIES = [
-  ["academic", "Academic"],
-  ["languages", "Languages"],
-  ["sports", "Sports"],
-  ["music", "Music"],
-  ["art-design", "Art & Design"],
-  ["exam-prep", "Exam Preparation"],
-] as const;
+const CATEGORY_SLUGS = ["academic", "languages", "sports", "music", "art-design", "exam-prep"] as const;
 
 export function OnboardingForm({
   initial,
@@ -37,6 +32,10 @@ export function OnboardingForm({
   hasActiveListing: boolean;
   published: boolean;
 }) {
+  const t = useTranslations("onboarding");
+  const common = useTranslations("common");
+  const tn = useTranslations("categoriesPage.names");
+  const errText = useActionError();
   const [state, action, pending] = useActionState<ActionResult | null, FormData>(
     saveProviderProfileAction,
     null,
@@ -48,7 +47,7 @@ export function OnboardingForm({
   return (
     <div className="space-y-8">
       <ol className="flex flex-wrap gap-2 text-xs text-ink-tertiary">
-        {["Profile", "Categories", "Lessons", "Publish"].map((s, i) => (
+        {[t("stepProfile"), t("stepCategories"), t("stepLessons"), t("stepPublish")].map((s, i) => (
           <li key={s} className="flex items-center gap-1.5">
             <span className="flex h-5 w-5 items-center justify-center rounded-pill bg-brand-lavender-200 text-brand-purple-700">
               {i + 1}
@@ -59,46 +58,58 @@ export function OnboardingForm({
       </ol>
 
       <form action={action} className="space-y-5">
-        <h2 className="text-lg font-semibold">1 · Your profile</h2>
-        <FormField label="Display name" required>
+        <h2 className="text-lg font-semibold">{t("section1")}</h2>
+        <FormField label={t("displayName")} required>
           {(p) => <Input {...p} name="displayName" defaultValue={initial.displayName} required />}
         </FormField>
-        <FormField label="Headline" hint="One line students see first.">
+        <FormField label={t("headline")} hint={t("headlineHint")}>
           {(p) => (
-            <Input {...p} name="headline" defaultValue={initial.headline ?? ""} placeholder="Physics & Maths tutor · 8 years" />
+            <Input
+              {...p}
+              name="headline"
+              defaultValue={initial.headline ?? ""}
+              placeholder={t("headlinePlaceholder")}
+            />
           )}
         </FormField>
-        <FormField label="About you">
+        <FormField label={t("aboutYou")}>
           {(p) => <Textarea {...p} name="bio" defaultValue={initial.bio ?? ""} />}
         </FormField>
         <div className="grid grid-cols-2 gap-3">
-          <FormField label="City">
+          <FormField label={t("city")}>
             {(p) => <Input {...p} name="city" defaultValue={initial.city ?? ""} />}
           </FormField>
-          <FormField label="District">
+          <FormField label={t("district")}>
             {(p) => <Input {...p} name="district" defaultValue={initial.district ?? ""} />}
           </FormField>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <FormField label="Format">
+          <FormField label={t("format")}>
             {(p) => (
               <Select {...p} name="deliveryMode" defaultValue={initial.deliveryMode}>
-                <option value="ONLINE">Online</option>
-                <option value="IN_PERSON">In person</option>
-                <option value="BOTH">Both</option>
+                <option value="ONLINE">{common("online")}</option>
+                <option value="IN_PERSON">{common("inPerson")}</option>
+                <option value="BOTH">{common("onlineAndInPerson")}</option>
               </Select>
             )}
           </FormField>
-          <FormField label="Years of experience">
+          <FormField label={t("yearsExperience")}>
             {(p) => (
-              <Input {...p} name="yearsExperience" type="number" min={0} max={70} defaultValue={initial.yearsExperience ?? ""} />
+              <Input
+                {...p}
+                name="yearsExperience"
+                type="number"
+                min={0}
+                max={70}
+                defaultValue={initial.yearsExperience ?? ""}
+              />
             )}
           </FormField>
         </div>
 
-        <h2 className="pt-2 text-lg font-semibold">2 · Categories</h2>
+        <h2 className="pt-2 text-lg font-semibold">{t("section2")}</h2>
         <div className="flex flex-wrap gap-2">
-          {CATEGORIES.map(([slug, label]) => {
+          {CATEGORY_SLUGS.map((slug) => {
             const on = cats.includes(slug);
             return (
               <button
@@ -109,7 +120,7 @@ export function OnboardingForm({
                   on ? "bg-brand-purple-600 text-white" : "bg-brand-lavender-100 text-brand-purple-700"
                 }`}
               >
-                {label}
+                {tn(slug)}
               </button>
             );
           })}
@@ -118,41 +129,37 @@ export function OnboardingForm({
           <input key={c} type="hidden" name="categorySlugs" value={c} />
         ))}
 
-        {state && !state.ok ? <p className="text-sm text-state-danger">{state.error}</p> : null}
-        {state?.ok ? <p className="text-sm text-state-success">{state.message}</p> : null}
+        {state && !state.ok ? <p className="text-sm text-state-danger">{errText(state)}</p> : null}
+        {state?.ok ? <p className="text-sm text-state-success">{t("profileSaved")}</p> : null}
         <Button type="submit" disabled={pending}>
-          {pending ? "Saving…" : "Save profile"}
+          {pending ? common("saving") : t("saveProfile")}
         </Button>
       </form>
 
       <div className="rounded-lg border border-line-soft bg-surface-base p-5 shadow-soft">
-        <h2 className="text-lg font-semibold">3 · Lessons &amp; packages</h2>
-        <p className="mt-1 text-sm text-ink-secondary">
-          Add at least one active lesson or package so students can book you.
-        </p>
+        <h2 className="text-lg font-semibold">{t("section3")}</h2>
+        <p className="mt-1 text-sm text-ink-secondary">{t("section3Body")}</p>
         <Button href="/provider/listings" variant="secondary" className="mt-3">
-          {hasActiveListing ? "Manage lessons" : "Add a lesson"}
+          {hasActiveListing ? t("manageLessons") : t("addLesson")}
         </Button>
       </div>
 
       <div className="rounded-lg border border-brand-purple-200 bg-brand-lavender-100/50 p-5">
-        <h2 className="text-lg font-semibold">4 · Publish</h2>
+        <h2 className="text-lg font-semibold">{t("section4")}</h2>
         <p className="mt-1 text-sm text-ink-secondary">
-          {published
-            ? "Your profile is live. You can keep editing anytime."
-            : hasActiveListing
-              ? "You're ready. Publishing makes your profile discoverable in search."
-              : "Add an active lesson first, then publish."}
+          {published ? t("publishedBody") : hasActiveListing ? t("readyBody") : t("notReadyBody")}
         </p>
         <Button
           className="mt-3"
           disabled={!hasActiveListing || publishing || published}
-          onClick={() => startPublish(async () => {
-            await publishProviderAction();
-            router.push("/provider");
-          })}
+          onClick={() =>
+            startPublish(async () => {
+              await publishProviderAction();
+              router.push("/provider");
+            })
+          }
         >
-          {published ? "Published" : publishing ? "Publishing…" : "Publish my profile"}
+          {published ? t("published") : publishing ? t("publishing") : t("publishCta")}
         </Button>
       </div>
     </div>

@@ -3,6 +3,26 @@
 Tracks progress against `11-testing-and-acceptance-criteria.md`. This is a
 **PARTIAL** implementation; the release gate is **BLOCKED** (see bottom).
 
+## QA Batch 1 (2026-09-02) — manual browser verification
+
+Dev DB now connected (Supabase apoindar-dev). Verified in the browser against
+seeded data, in both TR and EN:
+
+- ✅ Anonymous: home → search (10 seeded teachers) → provider profile
+- ✅ Student: signup → auto-login → dashboard; book single lesson → mock
+  payment → "Booking confirmed" (branded success) → shows on /bookings as
+  `confirmed / paid`
+- ✅ Auth: logout; invalid login → "Wrong email or password"; correct login
+- ✅ Free entitlements: 2nd listing forced to draft + "Activate" blocked
+  server-side; 4th active student blocked with a Premium explanation (TR + EN)
+- ✅ Password fields: hidden by default, eye-icon toggle (aria-label, keyboard)
+- ✅ TR default (`<html lang="tr">`), TR/EN switch persists across navigation
+- ✅ Branded skeleton/loader, search typing-placeholder, scroll reveals,
+  success motion, motif wallpaper — all intact after i18n changes
+
+Known: dev feels slow (remote pooled DB + dev compile); production build fine.
+Deep admin sub-pages and some service-layer edge errors not exhaustively walked.
+
 ## Automated tests
 
 | Layer | Status | Where |

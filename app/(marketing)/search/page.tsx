@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { searchProviders } from "@/lib/data/discovery";
 import { ProviderCard } from "@/components/marketplace/ProviderCard";
 import { SearchFilters } from "@/components/marketplace/SearchFilters";
@@ -10,21 +11,31 @@ import { Reveal } from "@/components/brand/Reveal";
 import { AnimatedSearchField } from "@/components/brand/AnimatedSearchField";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Find a teacher" };
+
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("search");
+  return { title: t("title") };
+}
 
 type SP = Record<string, string | string[] | undefined>;
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 
 async function Results({ sp }: { sp: SP }) {
+  const t = await getTranslations("search");
   const page = Number(one(sp.page) ?? "1") || 1;
   const { results, total, pageSize } = await searchProviders({
     q: one(sp.q),
     city: one(sp.city),
     categorySlug: one(sp.category),
-    mode: one(sp.mode) === "ONLINE" ? "ONLINE" : one(sp.mode) === "IN_PERSON" ? "IN_PERSON" : undefined,
+    mode:
+      one(sp.mode) === "ONLINE" ? "ONLINE" : one(sp.mode) === "IN_PERSON" ? "IN_PERSON" : undefined,
     maxPrice: one(sp.max) ? Number(one(sp.max)) : undefined,
     sort:
-      one(sp.sort) === "price_asc" ? "price_asc" : one(sp.sort) === "price_desc" ? "price_desc" : "relevance",
+      one(sp.sort) === "price_asc"
+        ? "price_asc"
+        : one(sp.sort) === "price_desc"
+          ? "price_desc"
+          : "relevance",
     page,
   });
 
@@ -32,9 +43,9 @@ async function Results({ sp }: { sp: SP }) {
     return (
       <EmptyState
         glyph="🔎"
-        title="No teachers match yet"
-        description="Try a broader search term, remove a filter, or switch to online lessons."
-        action={{ label: "Clear filters", href: "/search" }}
+        title={t("noResultsTitle")}
+        description={t("noResultsBody")}
+        action={{ label: t("clearFilters"), href: "/search" }}
       />
     );
   }
@@ -49,9 +60,7 @@ async function Results({ sp }: { sp: SP }) {
 
   return (
     <div>
-      <p className="mb-4 text-sm text-ink-secondary">
-        {total} teacher{total === 1 ? "" : "s"} found
-      </p>
+      <p className="mb-4 text-sm text-ink-secondary">{t("resultsCount", { count: total })}</p>
       <div className="grid gap-4 sm:grid-cols-2">
         {results.map((p, i) => (
           <Reveal key={p.id} delay={i * 50}>
@@ -81,11 +90,12 @@ async function Results({ sp }: { sp: SP }) {
 }
 
 export default async function SearchPage({ searchParams }: { searchParams: Promise<SP> }) {
+  const t = await getTranslations("search");
   const sp = await searchParams;
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl">Find a teacher</h1>
+        <h1 className="text-3xl">{t("title")}</h1>
         <div className="mt-4">
           <AnimatedSearchField className="max-w-3xl" />
         </div>

@@ -7,7 +7,20 @@ import { signIn } from "@/lib/auth";
 import { hashPassword } from "@/lib/auth-password";
 import { signupSchema, loginSchema } from "@/lib/validation/schemas";
 
-export type FormState = { error?: string; fieldErrors?: Record<string, string[]> };
+/**
+ * Actions return stable error *codes* (not localized text) so the client can
+ * render them in the active language. `fields` lists which inputs failed.
+ */
+export type FormState = {
+  code?:
+    | "EMAIL_EXISTS"
+    | "CREATED_LOGIN"
+    | "WRONG_CREDENTIALS"
+    | "INVALID_LOGIN"
+    | "INVALID_SIGNUP"
+    | "UNKNOWN";
+  fields?: string[];
+};
 
 export async function signupAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const parsed = signupSchema.safeParse({
@@ -17,29 +30,41 @@ export async function signupAction(_prev: FormState, formData: FormData): Promis
     role: formData.get("role") ?? "STUDENT",
   });
   if (!parsed.success) {
-    return { fieldErrors: parsed.error.flatten().fieldErrors };
+    return { code: "INVALID_SIGNUP", fields: Object.keys(parsed.error.flatten().fieldErrors) };
   }
   const { name, email, password, role } = parsed.data;
+  const normalizedEmail = email.trim().toLowerCase();
 
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) return { error: "An account with this email already exists." };
+  const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+  if (existing) return { code: "EMAIL_EXISTS", fields: ["email"] };
 
   const user = await prisma.user.create({
-    data: { name, email, role, passwordHash: await hashPassword(password) },
+    data: {
+      name: name.trim(),
+      email: normalizedEmail,
+      role,
+      passwordHash: await hashPassword(password),
+    },
   });
 
   if (role === "PROVIDER") {
     await prisma.provider.create({
-      data: { userId: user.id, displayName: name, onboardingStep: 1 },
+      data: { userId: user.id, displayName: name.trim(), onboardingStep: 1 },
     });
   }
 
   try {
-    await signIn("credentials", { email, password, redirect: false });
+    await signIn("credentials", {
+      email: normalizedEmail,
+      password,
+      redirect: false,
+    });
   } catch (err) {
-    if (err instanceof AuthError) return { error: "Account created — please log in." };
+    if (isRedirect(err)) throw err;
+    if (err instanceof AuthError) return { code: "CREATED_LOGIN" };
     throw err;
   }
+
   redirect(role === "PROVIDER" ? "/onboarding/provider" : "/dashboard");
 }
 
@@ -48,14 +73,33 @@ export async function loginAction(_prev: FormState, formData: FormData): Promise
     email: formData.get("email"),
     password: formData.get("password"),
   });
-  if (!parsed.success) return { error: "Enter a valid email and password." };
+  if (!parsed.success) return { code: "INVALID_LOGIN" };
+
+  const next = (formData.get("next") as string) || "";
+  const target = next.startsWith("/") ? next : "/dashboard";
 
   try {
-    await signIn("credentials", { ...parsed.data, redirect: false });
+    await signIn("credentials", {
+      email: parsed.data.email.trim().toLowerCase(),
+      password: parsed.data.password,
+      redirect: false,
+    });
   } catch (err) {
-    if (err instanceof AuthError) return { error: "Wrong email or password." };
+    if (isRedirect(err)) throw err;
+    if (err instanceof AuthError) return { code: "WRONG_CREDENTIALS" };
     throw err;
   }
-  const next = (formData.get("next") as string) || "/dashboard";
-  redirect(next.startsWith("/") ? next : "/dashboard");
+
+  redirect(target);
+}
+
+/** Next's redirect() throws a control-flow error we must not swallow. */
+function isRedirect(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "digest" in err &&
+    typeof (err as { digest: unknown }).digest === "string" &&
+    (err as { digest: string }).digest.startsWith("NEXT_REDIRECT")
+  );
 }

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { getTranslations, getLocale } from "next-intl/server";
 import { requireUser } from "@/lib/authz";
 import { studentDashboard } from "@/lib/data/student";
 import { StatCard } from "@/components/ui/StatCard";
@@ -10,59 +11,78 @@ import { Reveal } from "@/components/brand/Reveal";
 import { packageProgress, remainingCredits } from "@/lib/domain/package-credit";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Your learning" };
+
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("studentDash");
+  return { title: t("metaTitle") };
+}
 
 export default async function StudentDashboard() {
   const user = await requireUser();
   if (user.role === "PROVIDER") redirect("/provider");
   if (user.role === "ADMIN") redirect("/admin");
 
+  const t = await getTranslations("studentDash");
+  const common = await getTranslations("common");
+  const locale = await getLocale();
+  const loc = locale === "tr" ? "tr-TR" : "en-GB";
   const { upcoming, packages, recentProviders } = await studentDashboard(user.id);
   const nextLesson = upcoming[0];
   const activePackage = packages.find((p) => remainingCredits(p) > 0);
+
+  const h = new Date().getHours();
+  const greeting = h < 12 ? t("greetingMorning") : h < 18 ? t("greetingAfternoon") : t("greetingEvening");
 
   return (
     <div className="space-y-8">
       <Reveal>
         <h1 className="text-2xl">
-          {greeting()}, {user.name?.split(" ")[0] ?? "there"}.
+          {t("greeting", { greeting, name: user.name?.split(" ")[0] ?? "" })}
         </h1>
-        <p className="text-sm text-ink-secondary">Here’s where your learning stands.</p>
+        <p className="text-sm text-ink-secondary">{t("subtitle")}</p>
       </Reveal>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard
-          label="Next lesson"
+          label={t("nextLesson")}
           tone="yellow"
           value={
             nextLesson?.scheduledAt
-              ? new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(nextLesson.scheduledAt)
+              ? new Intl.DateTimeFormat(loc, {
+                  day: "numeric",
+                  month: "short",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }).format(nextLesson.scheduledAt)
               : "—"
           }
-          hint={nextLesson ? `with ${nextLesson.provider.displayName}` : "No upcoming lessons"}
+          hint={nextLesson ? t("with", { name: nextLesson.provider.displayName }) : t("noUpcoming")}
         />
         <StatCard
-          label="Active package"
+          label={t("activePackage")}
           tone="lavender"
-          value={activePackage ? `${remainingCredits(activePackage)} left` : "—"}
+          value={activePackage ? t("remaining", { count: remainingCredits(activePackage) }) : "—"}
           hint={
             activePackage
-              ? `${activePackage.booking.listing.title} · ${Math.round(packageProgress(activePackage) * 100)}% done`
-              : "No active package"
+              ? t("packageProgress", {
+                  title: activePackage.booking.listing.title,
+                  percent: Math.round(packageProgress(activePackage) * 100),
+                })
+              : t("noActivePackage")
           }
         />
         <StatCard
-          label="Upcoming bookings"
+          label={t("upcomingBookings")}
           value={upcoming.length}
-          hint={upcoming.length ? "confirmed & paid" : "Book your next lesson"}
+          hint={upcoming.length ? t("confirmedPaid") : t("bookNext")}
         />
       </div>
 
       <section>
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-xl">Upcoming bookings</h2>
+          <h2 className="text-xl">{t("upcomingBookings")}</h2>
           <Link href="/bookings" className="text-sm text-brand-purple-700 hover:underline">
-            All bookings →
+            {t("allBookings")} →
           </Link>
         </div>
         {upcoming.length ? (
@@ -74,15 +94,15 @@ export default async function StudentDashboard() {
                   <p className="text-sm text-ink-secondary">
                     {b.provider.displayName}
                     {b.scheduledAt
-                      ? ` · ${new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(b.scheduledAt)}`
-                      : " · time to be arranged"}
+                      ? ` · ${new Intl.DateTimeFormat(loc, { dateStyle: "medium", timeStyle: "short" }).format(b.scheduledAt)}`
+                      : ` · ${t("timeToArrange")}`}
                   </p>
                 </div>
                 <Link
-                  href={`/bookings`}
+                  href="/bookings"
                   className="rounded-pill bg-brand-lavender-100 px-3 py-1 text-xs font-medium text-brand-purple-700"
                 >
-                  Details
+                  {common("details")}
                 </Link>
               </Card>
             ))}
@@ -90,16 +110,16 @@ export default async function StudentDashboard() {
         ) : (
           <EmptyState
             glyph="🗓️"
-            title="No upcoming lessons"
-            description="Find a teacher and book your first lesson — it takes a couple of minutes."
-            action={{ label: "Find a teacher", href: "/search" }}
+            title={t("noUpcomingTitle")}
+            description={t("noUpcomingBody")}
+            action={{ label: t("findTeacher"), href: "/search" }}
           />
         )}
       </section>
 
       {recentProviders.length ? (
         <section>
-          <h2 className="mb-3 text-xl">Continue with</h2>
+          <h2 className="mb-3 text-xl">{t("continueWith")}</h2>
           <div className="grid gap-3 sm:grid-cols-2">
             {recentProviders.map((b) => (
               <Link
@@ -112,7 +132,7 @@ export default async function StudentDashboard() {
                 </span>
                 <div>
                   <p className="text-sm font-medium">{b.provider.displayName}</p>
-                  <p className="text-xs text-ink-tertiary">{b.provider.headline ?? "Teacher"}</p>
+                  <p className="text-xs text-ink-tertiary">{b.provider.headline ?? ""}</p>
                 </div>
               </Link>
             ))}
@@ -121,9 +141,4 @@ export default async function StudentDashboard() {
       ) : null}
     </div>
   );
-}
-
-function greeting() {
-  const h = new Date().getHours();
-  return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
 }

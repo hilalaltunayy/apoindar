@@ -1,16 +1,22 @@
 import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
 import { requireProvider } from "@/lib/authz";
 import { providerCalendar, providerStudents } from "@/lib/data/provider";
 import { CalendarBoard } from "@/components/provider/CalendarBoard";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Calendar" };
+
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("calendar");
+  return { title: t("metaTitle") };
+}
 
 function dayKey(d: Date) {
   return d.toISOString().slice(0, 10);
 }
 
 export default async function ProviderCalendarPage() {
+  const t = await getTranslations("calendar");
   const { provider, plan, entitlements } = await requireProvider();
   const [{ slots, lessons }, students] = await Promise.all([
     providerCalendar(provider.id),
@@ -30,9 +36,9 @@ export default async function ProviderCalendarPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl">Calendar</h1>
+        <h1 className="text-2xl">{t("title")}</h1>
         <p className="text-sm text-ink-secondary">
-          Next 14 days. {plan === "FREE" ? "Free: day/week view, availability, one-time lessons." : "Premium: recurring lessons, student colours, templates."}
+          {plan === "FREE" ? t("subtitleFree") : t("subtitlePremium")}
         </p>
       </div>
       <CalendarBoard

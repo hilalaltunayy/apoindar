@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations, useLocale } from "next-intl";
 import { Button } from "@/components/ui/Button";
 import { BrandLoader } from "@/components/ui/BrandLoader";
 import { SuccessBurst } from "@/components/brand/SuccessBurst";
@@ -28,15 +29,24 @@ interface Props {
 }
 
 type Step = "time" | "review" | "pay" | "done";
-const STEPS: { key: Step; label: string }[] = [
-  { key: "time", label: "Time" },
-  { key: "review", label: "Review" },
-  { key: "pay", label: "Payment" },
-  { key: "done", label: "Done" },
-];
 
 export function BookingWizard({ listing, providerName, slots, cancellationPolicy }: Props) {
   const router = useRouter();
+  const t = useTranslations("booking");
+  const common = useTranslations("common");
+  const locale = useLocale();
+  const dtLong = new Intl.DateTimeFormat(locale === "tr" ? "tr-TR" : "en-GB", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+  const dtShort = new Intl.DateTimeFormat(locale === "tr" ? "tr-TR" : "en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
   const [step, setStep] = useState<Step>(slots.length ? "time" : "review");
   const [slotId, setSlotId] = useState<string | null>(null);
   const [bookingId, setBookingId] = useState<string | null>(null);
@@ -44,12 +54,15 @@ export function BookingWizard({ listing, providerName, slots, cancellationPolicy
   const [pending, start] = useTransition();
   const idem = useMemo(() => crypto.randomUUID(), []);
 
-  const chosenSlot = slots.find((s) => s.id === slotId);
+  const STEPS: { key: Step; label: string }[] = [
+    { key: "time", label: t("stepTime") },
+    { key: "review", label: t("stepReview") },
+    { key: "pay", label: t("stepPayment") },
+    { key: "done", label: t("stepDone") },
+  ];
 
-  function toReview() {
-    setError(null);
-    setStep("review");
-  }
+  const chosenSlot = slots.find((s) => s.id === slotId);
+  const kindLabel = listing.kind === "PACKAGE" ? common("package") : common("singleLesson");
 
   function createBooking() {
     setError(null);
@@ -82,13 +95,14 @@ export function BookingWizard({ listing, providerName, slots, cancellationPolicy
 
   return (
     <div className="card-surface p-6 shadow-raised">
-      {/* progress */}
       <ol className="mb-6 flex items-center gap-2 text-xs">
         {STEPS.map((s, i) => (
           <li key={s.key} className="flex items-center gap-2">
             <span
               className={`flex h-6 w-6 items-center justify-center rounded-pill font-medium ${
-                i <= activeIndex ? "bg-brand-purple-600 text-white" : "bg-brand-lavender-100 text-brand-purple-700"
+                i <= activeIndex
+                  ? "bg-brand-purple-600 text-white"
+                  : "bg-brand-lavender-100 text-brand-purple-700"
               }`}
             >
               {i + 1}
@@ -99,11 +113,11 @@ export function BookingWizard({ listing, providerName, slots, cancellationPolicy
         ))}
       </ol>
 
-      {pending ? <BrandLoader label={step === "pay" ? "Processing payment" : "Working"} /> : null}
+      {pending ? <BrandLoader label={step === "pay" ? t("processing") : t("working")} /> : null}
 
       {!pending && step === "time" ? (
         <div>
-          <h2 className="text-lg font-semibold">Choose a time</h2>
+          <h2 className="text-lg font-semibold">{t("chooseTime")}</h2>
           <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
             {slots.map((s) => (
               <button
@@ -116,19 +130,13 @@ export function BookingWizard({ listing, providerName, slots, cancellationPolicy
                     : "border-line-soft hover:bg-brand-lavender-100/60"
                 }`}
               >
-                {new Intl.DateTimeFormat("en-GB", {
-                  weekday: "short",
-                  day: "numeric",
-                  month: "short",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                }).format(new Date(s.startsAt))}
+                {dtShort.format(new Date(s.startsAt))}
               </button>
             ))}
           </div>
           <div className="mt-5 flex justify-end">
-            <Button onClick={toReview} disabled={!slotId}>
-              Continue
+            <Button onClick={() => setStep("review")} disabled={!slotId}>
+              {common("continue")}
             </Button>
           </div>
         </div>
@@ -136,25 +144,18 @@ export function BookingWizard({ listing, providerName, slots, cancellationPolicy
 
       {!pending && step === "review" ? (
         <div>
-          <h2 className="text-lg font-semibold">Review your booking</h2>
+          <h2 className="text-lg font-semibold">{t("reviewTitle")}</h2>
           <dl className="mt-3 space-y-2 text-sm">
-            <Row k="Teacher" v={providerName} />
-            <Row k={listing.kind === "PACKAGE" ? "Package" : "Lesson"} v={listing.title} />
-            {listing.kind === "PACKAGE" ? <Row k="Lessons" v={`${listing.lessonCount}`} /> : null}
-            <Row k="Duration" v={`${listing.durationMin} min`} />
-            {chosenSlot ? (
-              <Row
-                k="Time"
-                v={new Intl.DateTimeFormat("en-GB", {
-                  dateStyle: "medium",
-                  timeStyle: "short",
-                }).format(new Date(chosenSlot.startsAt))}
-              />
-            ) : (
-              <Row k="Time" v="To be arranged with the teacher" />
-            )}
+            <Row k={t("rowTeacher")} v={providerName} />
+            <Row k={listing.kind === "PACKAGE" ? t("rowPackage") : t("rowLesson")} v={listing.title} />
+            {listing.kind === "PACKAGE" ? <Row k={t("rowLessons")} v={`${listing.lessonCount}`} /> : null}
+            <Row k={t("rowDuration")} v={`${listing.durationMin} ${common("minutes")}`} />
+            <Row
+              k={t("rowTime")}
+              v={chosenSlot ? dtLong.format(new Date(chosenSlot.startsAt)) : t("timeToArrange")}
+            />
             <div className="flex justify-between border-t border-line-soft pt-2 text-base font-semibold">
-              <span>Total</span>
+              <span>{t("total")}</span>
               <span>{formatMoney(listing.priceAmount, listing.currency)}</span>
             </div>
           </dl>
@@ -165,31 +166,31 @@ export function BookingWizard({ listing, providerName, slots, cancellationPolicy
           <div className="mt-5 flex justify-between">
             {slots.length ? (
               <Button variant="ghost" onClick={() => setStep("time")}>
-                Back
+                {common("back")}
               </Button>
             ) : (
               <span />
             )}
-            <Button onClick={createBooking}>Continue to payment</Button>
+            <Button onClick={createBooking}>{t("continuePayment")}</Button>
           </div>
         </div>
       ) : null}
 
       {!pending && step === "pay" ? (
         <div>
-          <h2 className="text-lg font-semibold">Payment</h2>
-          <p className="mt-1 text-sm text-ink-secondary">
-            🔒 Secure test payment. No real card is charged in this environment.
-          </p>
+          <h2 className="text-lg font-semibold">{t("paymentTitle")}</h2>
+          <p className="mt-1 text-sm text-ink-secondary">{t("paymentSecureNote")}</p>
           <div className="mt-4 flex items-center justify-between rounded-md border border-line-soft p-4">
-            <span className="text-sm">Amount due</span>
+            <span className="text-sm">{t("amountDue")}</span>
             <span className="text-lg font-semibold">
               {formatMoney(listing.priceAmount, listing.currency)}
             </span>
           </div>
           {error ? <p className="mt-3 text-sm text-state-danger">{error}</p> : null}
           <div className="mt-5 flex justify-end">
-            <Button onClick={pay}>Pay {formatMoney(listing.priceAmount, listing.currency)}</Button>
+            <Button onClick={pay}>
+              {t("pay", { amount: formatMoney(listing.priceAmount, listing.currency) })}
+            </Button>
           </div>
         </div>
       ) : null}
@@ -197,14 +198,14 @@ export function BookingWizard({ listing, providerName, slots, cancellationPolicy
       {!pending && step === "done" ? (
         <div className="text-center">
           <SuccessBurst />
-          <h2 className="mt-2 font-serif text-2xl">Booking confirmed</h2>
+          <h2 className="mt-2 font-serif text-2xl">{t("confirmedTitle")}</h2>
           <p className="mt-1 text-sm text-ink-secondary">
-            Your {listing.kind === "PACKAGE" ? "package" : "lesson"} with {providerName} is booked and paid.
+            {t("confirmedBody", { kind: kindLabel.toLowerCase(), name: providerName })}
           </p>
           <div className="mt-5 flex justify-center gap-3">
-            <Button href="/bookings">View my bookings</Button>
+            <Button href="/bookings">{t("viewBookings")}</Button>
             <Button variant="secondary" onClick={() => router.push("/search")}>
-              Find another teacher
+              {t("findAnother")}
             </Button>
           </div>
         </div>

@@ -1,19 +1,25 @@
 import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
 import { prisma } from "@/lib/prisma";
 import { safeQuery } from "@/lib/data/safe";
 import { requireUser } from "@/lib/authz";
 import { BookingWizard } from "@/components/booking/BookingWizard";
-import { DEFAULT_CANCELLATION_POLICY } from "@/lib/services/booking";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Book a lesson" };
+
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("booking");
+  return { title: t("metaTitle") };
+}
 
 export default async function BookPage({ params }: { params: Promise<{ listingId: string }> }) {
   const { listingId } = await params;
   const user = await requireUser(`/book/${listingId}`);
   if (user.role === "PROVIDER") redirect("/provider");
 
+  const t = await getTranslations("provider");
+  const tb = await getTranslations("booking");
   const listing = await safeQuery(
     () =>
       prisma.listing.findFirst({
@@ -39,7 +45,7 @@ export default async function BookPage({ params }: { params: Promise<{ listingId
 
   return (
     <div className="mx-auto max-w-xl">
-      <h1 className="mb-1 text-2xl">Book with {listing.provider.displayName}</h1>
+      <h1 className="mb-1 text-2xl">{t("bookWith", { name: listing.provider.displayName })}</h1>
       <p className="mb-6 text-sm text-ink-secondary">{listing.title}</p>
       <BookingWizard
         listing={{
@@ -56,7 +62,7 @@ export default async function BookPage({ params }: { params: Promise<{ listingId
           id: s.id,
           startsAt: s.startsAt.toISOString(),
         }))}
-        cancellationPolicy={DEFAULT_CANCELLATION_POLICY}
+        cancellationPolicy={tb("cancellationPolicy")}
       />
     </div>
   );

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { currentUser } from "@/lib/authz";
 import { prisma } from "@/lib/prisma";
 import { safeQuery } from "@/lib/data/safe";
@@ -9,12 +10,20 @@ import { formatMoney } from "@/lib/money";
 import { COMMISSION_RATE } from "@/lib/config/commerce";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Admin" };
+
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("admin");
+  return { title: t("metaTitle") };
+}
 
 export default async function AdminPage() {
   const user = await currentUser();
   if (!user) redirect("/login?next=/admin");
   if (user.role !== "ADMIN") redirect("/dashboard");
+
+  const t = await getTranslations("admin");
+  const common = await getTranslations("common");
+  const st = await getTranslations("statusLabels");
 
   const data = await safeQuery(
     async () => {
@@ -36,54 +45,63 @@ export default async function AdminPage() {
   );
 
   if (!data) {
-    return <p className="text-sm text-ink-secondary">Admin metrics unavailable (database not connected).</p>;
+    return <p className="text-sm text-ink-secondary">{t("unavailable")}</p>;
   }
+
+  const navItems = [
+    [t("navProviders"), "/admin/providers"],
+    [t("navBookings"), "/admin/bookings"],
+    [t("navSubscriptions"), "/admin/subscriptions"],
+    [t("navComplaints"), "/admin/complaints"],
+  ] as const;
 
   return (
     <div className="space-y-8">
-      <h1 className="text-2xl">Admin</h1>
+      <h1 className="text-2xl">{t("title")}</h1>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Users" value={data.users} />
-        <StatCard label="Providers" value={`${data.publishedProviders} / ${data.providers}`} hint="published / total" />
-        <StatCard label="Confirmed bookings" value={data.bookings} tone="lavender" />
-        <StatCard label="GMV" value={formatMoney(data.gmv._sum.grossAmount ?? 0)} tone="yellow" />
-        <StatCard label="Platform commission" value={formatMoney(data.commission._sum.platformCommission ?? 0)} />
-        <StatCard label="Open complaints" value={data.complaints} />
-        <StatCard label="Providers awaiting moderation" value={data.pendingMod} />
+        <StatCard label={t("users")} value={data.users} />
         <StatCard
-          label="Subscriptions"
+          label={t("providers")}
+          value={`${data.publishedProviders} / ${data.providers}`}
+          hint={t("publishedTotal")}
+        />
+        <StatCard label={t("confirmedBookings")} value={data.bookings} tone="lavender" />
+        <StatCard label={t("gmv")} value={formatMoney(data.gmv._sum.grossAmount ?? 0)} tone="yellow" />
+        <StatCard
+          label={t("platformCommission")}
+          value={formatMoney(data.commission._sum.platformCommission ?? 0)}
+        />
+        <StatCard label={t("openComplaints")} value={data.complaints} />
+        <StatCard label={t("awaitingModeration")} value={data.pendingMod} />
+        <StatCard
+          label={t("subscriptions")}
           value={data.subs.reduce((a, s) => a + s._count, 0)}
-          hint={data.subs.map((s) => `${s.status.toLowerCase()}: ${s._count}`).join(" · ") || "none"}
+          hint={
+            data.subs.map((s) => `${st(s.status)}: ${s._count}`).join(" · ") || t("none")
+          }
         />
       </div>
 
       <section>
-        <h2 className="mb-3 text-lg">Commission rules (config-driven)</h2>
+        <h2 className="mb-3 text-lg">{t("commissionRulesTitle")}</h2>
         <table className="text-sm">
           <tbody>
             <tr className="border-b border-line-soft/60">
-              <td className="py-1.5 pr-8 font-medium">Free</td>
+              <td className="py-1.5 pr-8 font-medium">{common("free")}</td>
               <td>{Math.round(COMMISSION_RATE.FREE * 100)}%</td>
             </tr>
             <tr>
-              <td className="py-1.5 pr-8 font-medium">Premium</td>
+              <td className="py-1.5 pr-8 font-medium">{common("premium")}</td>
               <td>{Math.round(COMMISSION_RATE.PREMIUM * 100)}%</td>
             </tr>
           </tbody>
         </table>
-        <p className="mt-2 text-xs text-ink-tertiary">
-          Source: <code>lib/config/commerce.ts</code>. DB overrides live in <code>commission_rules</code>.
-        </p>
+        <p className="mt-2 text-xs text-ink-tertiary">{t("commissionRulesNote")}</p>
       </section>
 
       <nav className="flex flex-wrap gap-2">
-        {([
-          ["Providers", "/admin/providers"],
-          ["Bookings & payments", "/admin/bookings"],
-          ["Subscriptions", "/admin/subscriptions"],
-          ["Complaints", "/admin/complaints"],
-        ] as const).map(([label, href]) => (
+        {navItems.map(([label, href]) => (
           <Link
             key={href}
             href={href}

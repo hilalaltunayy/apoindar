@@ -53,7 +53,7 @@ export async function createListing(
       where: { providerId, status: "ACTIVE" },
     });
     const check = canActivateListing(entitlements, activeCount);
-    if (!check.allowed) throw new AuthorizationError(check.reason);
+    if (!check.allowed) throw new AuthorizationError(check.reason, 403, check.code);
   }
 
   const category = input.categorySlug
@@ -97,7 +97,7 @@ export async function setListingActive(
       where: { providerId: listing.providerId, status: "ACTIVE", id: { not: listingId } },
     });
     const check = canActivateListing(entitlements, activeCount);
-    if (!check.allowed) throw new AuthorizationError(check.reason);
+    if (!check.allowed) throw new AuthorizationError(check.reason, 403, check.code);
   }
   const updated = await prisma.listing.update({
     where: { id: listingId },
@@ -132,7 +132,7 @@ export async function addStudent(
     where: { providerId, status: "ACTIVE" },
   });
   const check = canAddActiveStudent(entitlements, activeCount);
-  if (!check.allowed) throw new AuthorizationError(check.reason);
+  if (!check.allowed) throw new AuthorizationError(check.reason, 403, check.code);
 
   return prisma.studentProfile.create({
     data: {
@@ -164,7 +164,7 @@ export async function setStudentStatus(
       where: { providerId: student.providerId, status: "ACTIVE" },
     });
     const check = canAddActiveStudent(entitlements, activeCount);
-    if (!check.allowed) throw new AuthorizationError(check.reason);
+    if (!check.allowed) throw new AuthorizationError(check.reason, 403, check.code);
   }
   // Non-destructive: status change only, never deletes retained data (10 §11).
   return prisma.studentProfile.update({ where: { id: studentId }, data: { status } });
@@ -180,7 +180,7 @@ export async function createRecurringLesson(
   await assertOwnership(providerId, ownerUserId);
   const { entitlements } = await resolveEntitlements(providerId);
   const gate = canCreateRecurringLesson(entitlements);
-  if (!gate.allowed) throw new AuthorizationError(gate.reason); // Premium-only (10 §7)
+  if (!gate.allowed) throw new AuthorizationError(gate.reason, 403, gate.code); // Premium-only (10 §7)
 
   const student = await prisma.studentProfile.findFirst({
     where: { id: input.studentId, providerId },

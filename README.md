@@ -30,8 +30,23 @@ npm run db:seed                # optional dev/demo data (clearly namespaced)
 npm run dev
 ```
 
-`AUTH_SECRET`: `npx auth secret`. `DATABASE_URL`/`DIRECT_URL`: Supabase → Project
-Settings → Database → Connection string (pooled + direct).
+`AUTH_SECRET`: `npx auth secret`. `DATABASE_URL` (transaction pooler, port 6543,
+`?pgbouncer=true`) + `DIRECT_URL` (session pooler, port 5432): Supabase → Project
+Settings → Database → Connection string. The Prisma CLI reads `.env.local` via
+`prisma.config.ts`.
+
+Dev database is the Supabase **apoindar-dev** project. Migrations already applied
+there; new machines run `npx prisma migrate deploy` then `npm run db:seed`
+(`SEED_DEMO=true` for the demo marketplace — all accounts `<name>@demo.apoindar.local`,
+password `Apoindar!Demo1`).
+
+## Internationalization
+
+`next-intl` (cookie-based locale, no route prefixes — one app). **Turkish is the
+default**; English is fully supported. Messages live in `messages/{tr,en}.json`;
+locale config in `i18n/`. UI chrome, validation, metadata and status labels are
+localized; user-generated content (provider bios, listing titles) is not.
+The TR/EN switch is in the header and footer.
 
 ## Architecture
 

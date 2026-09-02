@@ -53,23 +53,36 @@ export function entitlementsForPlan(plan: ProviderPlan): EntitlementSnapshot {
   };
 }
 
+/**
+ * Stable machine codes for blocked-entitlement outcomes. The UI maps these to
+ * localized copy (messages: `entitlementErrors.<code>`); `reason` is the English
+ * fallback for logs / non-UI consumers.
+ */
+export type EntitlementCode =
+  | "LISTING_LIMIT_FREE"
+  | "LISTING_LIMIT"
+  | "STUDENT_LIMIT_FREE"
+  | "STUDENT_LIMIT"
+  | "RECURRING_PREMIUM_ONLY"
+  | "PREMIUM_FEATURE";
+
 export type EntitlementCheck =
   | { allowed: true }
-  | { allowed: false; reason: string; upgradeRequired: boolean };
+  | { allowed: false; code: EntitlementCode; reason: string; upgradeRequired: boolean };
 
 export function canActivateListing(
   snapshot: EntitlementSnapshot,
   currentActiveCount: number,
 ): EntitlementCheck {
   if (currentActiveCount < snapshot.listingsMaxActive) return { allowed: true };
-  return {
-    allowed: false,
-    upgradeRequired: true,
-    reason:
-      snapshot.plan === "FREE"
-        ? "Free providers can have 1 active lesson or package. Upgrade to Premium for unlimited listings."
-        : "Active listing limit reached.",
-  };
+  return snapshot.plan === "FREE"
+    ? {
+        allowed: false,
+        upgradeRequired: true,
+        code: "LISTING_LIMIT_FREE",
+        reason: "Free providers can have 1 active lesson or package. Upgrade to Premium for unlimited listings.",
+      }
+    : { allowed: false, upgradeRequired: true, code: "LISTING_LIMIT", reason: "Active listing limit reached." };
 }
 
 export function canAddActiveStudent(
@@ -77,14 +90,14 @@ export function canAddActiveStudent(
   currentActiveCount: number,
 ): EntitlementCheck {
   if (currentActiveCount < snapshot.studentsMaxActive) return { allowed: true };
-  return {
-    allowed: false,
-    upgradeRequired: true,
-    reason:
-      snapshot.plan === "FREE"
-        ? "Free providers can manage 3 active students. Upgrade to Premium for unlimited students."
-        : "Active student limit reached.",
-  };
+  return snapshot.plan === "FREE"
+    ? {
+        allowed: false,
+        upgradeRequired: true,
+        code: "STUDENT_LIMIT_FREE",
+        reason: "Free providers can manage 3 active students. Upgrade to Premium for unlimited students.",
+      }
+    : { allowed: false, upgradeRequired: true, code: "STUDENT_LIMIT", reason: "Active student limit reached." };
 }
 
 export function canCreateRecurringLesson(snapshot: EntitlementSnapshot): EntitlementCheck {
@@ -92,6 +105,7 @@ export function canCreateRecurringLesson(snapshot: EntitlementSnapshot): Entitle
   return {
     allowed: false,
     upgradeRequired: true,
+    code: "RECURRING_PREMIUM_ONLY",
     reason: "Recurring lessons are a Premium feature.",
   };
 }
@@ -106,7 +120,12 @@ export function requireEntitlement(
     "dashboard.growth": snapshot.growthDashboard,
   };
   if (map[key]) return { allowed: true };
-  return { allowed: false, upgradeRequired: true, reason: "This is a Premium feature." };
+  return {
+    allowed: false,
+    upgradeRequired: true,
+    code: "PREMIUM_FEATURE",
+    reason: "This is a Premium feature.",
+  };
 }
 
 /** Flat key/value pairs persisted as SubscriptionEntitlement rows. */

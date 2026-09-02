@@ -1,45 +1,48 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { Logo } from "@/components/brand/Logo";
+import { LanguageSwitcher } from "@/components/brand/LanguageSwitcher";
 
-const COLUMNS = [
-  {
-    title: "Learn",
-    links: [
-      { label: "Find a Teacher", href: "/search" },
-      { label: "Categories", href: "/categories" },
-      { label: "How It Works", href: "/how-it-works" },
-    ],
-  },
-  {
-    title: "Teach",
-    links: [
-      { label: "For Teachers", href: "/for-teachers" },
-      { label: "Premium", href: "/premium" },
-      { label: "Become a Provider", href: "/signup?role=provider" },
-    ],
-  },
-  {
-    title: "Company",
-    links: [
-      { label: "Trust & Safety", href: "/trust" },
-      { label: "FAQ", href: "/faq" },
-      { label: "Support", href: "/support" },
-    ],
-  },
-] as const;
+export async function SiteFooter() {
+  const t = await getTranslations("footer");
+  const nav = await getTranslations("nav");
 
-export function SiteFooter() {
+  const columns = [
+    {
+      title: t("learn"),
+      links: [
+        { label: nav("findTeacher"), href: "/search" },
+        { label: nav("categories"), href: "/categories" },
+        { label: nav("howItWorks"), href: "/how-it-works" },
+      ],
+    },
+    {
+      title: t("teach"),
+      links: [
+        { label: nav("forTeachers"), href: "/for-teachers" },
+        { label: nav("premium"), href: "/premium" },
+        { label: t("becomeProvider"), href: "/signup?role=provider" },
+      ],
+    },
+    {
+      title: t("company"),
+      links: [
+        { label: t("trustSafety"), href: "/trust" },
+        { label: t("faq"), href: "/faq" },
+        { label: t("support"), href: "/support" },
+      ],
+    },
+  ];
+
   return (
     <footer className="mt-20 border-t border-line-soft bg-bg-soft/60">
       <div className="mx-auto grid max-w-6xl gap-10 px-4 py-14 sm:grid-cols-2 md:grid-cols-4">
         <div className="space-y-3">
           <Logo />
-          <p className="max-w-xs text-sm text-ink-secondary">
-            Find the right teacher. Achieve your goals. Book securely and keep the
-            learning relationship in one place.
-          </p>
+          <p className="max-w-xs text-sm text-ink-secondary">{t("tagline")}</p>
+          <LanguageSwitcher />
         </div>
-        {COLUMNS.map((col) => (
+        {columns.map((col) => (
           <div key={col.title}>
             <h4 className="text-sm font-semibold text-ink-primary">{col.title}</h4>
             <ul className="mt-3 space-y-2">
@@ -58,7 +61,7 @@ export function SiteFooter() {
         ))}
       </div>
       <div className="border-t border-line-soft/70 px-4 py-6 text-center text-xs text-ink-tertiary">
-        © {new Date().getFullYear()} Apoindar. Prices in TRY. Students pay no platform fee.
+        {t("rights", { year: new Date().getFullYear() })}
       </div>
     </footer>
   );

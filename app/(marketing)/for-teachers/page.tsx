@@ -1,26 +1,29 @@
 import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
 import { Reveal } from "@/components/brand/Reveal";
 import { Button } from "@/components/ui/Button";
 import { formatMoney } from "@/lib/money";
 import { COMMISSION_RATE, PREMIUM_PRICE, PREMIUM_TRIAL_DAYS } from "@/lib/config/commerce";
 
-export const metadata: Metadata = { title: "For teachers" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("forTeachers");
+  return { title: t("metaTitle") };
+}
 
-export default function ForTeachersPage() {
+export default async function ForTeachersPage() {
+  const t = await getTranslations("forTeachers");
+  const free = Math.round(COMMISSION_RATE.FREE * 100);
+  const premium = Math.round(COMMISSION_RATE.PREMIUM * 100);
+
   return (
     <div className="space-y-16">
       <Reveal>
-        <h1 className="max-w-2xl text-4xl leading-tight sm:text-5xl">
-          Turn your empty hours into income.
-        </h1>
-        <p className="mt-4 max-w-xl text-lg text-ink-secondary">
-          Apoindar helps you get discovered, sell lessons and packages, manage students
-          and schedule, and keep more of what you earn.
-        </p>
+        <h1 className="max-w-2xl text-4xl leading-tight sm:text-5xl">{t("title")}</h1>
+        <p className="mt-4 max-w-xl text-lg text-ink-secondary">{t("subtitle")}</p>
         <div className="mt-6 flex gap-3">
-          <Button href="/signup?role=provider">Create a free profile</Button>
+          <Button href="/signup?role=provider">{t("createFreeProfile")}</Button>
           <Button href="/premium" variant="secondary">
-            See Premium
+            {t("seePremium")}
           </Button>
         </div>
       </Reveal>
@@ -28,18 +31,15 @@ export default function ForTeachersPage() {
       <Reveal>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="rounded-xl border border-line-soft bg-surface-base p-6 shadow-soft">
-            <h2 className="font-serif text-lg">Free</h2>
-            <p className="text-sm text-ink-secondary">
-              {Math.round(COMMISSION_RATE.FREE * 100)}% commission · 1 active listing · 3 active students ·
-              basic calendar & analytics. A real, usable plan — not a demo.
-            </p>
+            <h2 className="font-serif text-lg">{t("freeTitle")}</h2>
+            <p className="text-sm text-ink-secondary">{t("freeBody", { free })}</p>
           </div>
           <div className="rounded-xl border-2 border-brand-purple-400 bg-brand-lavender-100/60 p-6 shadow-soft">
-            <h2 className="font-serif text-lg">Premium — {formatMoney(PREMIUM_PRICE.MONTH)}/mo</h2>
+            <h2 className="font-serif text-lg">
+              {t("premiumTitle", { price: formatMoney(PREMIUM_PRICE.MONTH) })}
+            </h2>
             <p className="text-sm text-ink-secondary">
-              {Math.round(COMMISSION_RATE.PREMIUM * 100)}% commission · unlimited listings & students ·
-              recurring lessons · advanced calendar & CRM · Growth Dashboard · {PREMIUM_TRIAL_DAYS}-day
-              free trial, no card.
+              {t("premiumBody", { premium, days: PREMIUM_TRIAL_DAYS })}
             </p>
           </div>
         </div>
@@ -47,12 +47,8 @@ export default function ForTeachersPage() {
 
       <Reveal>
         <div className="rounded-2xl bg-brand-yellow-100/50 p-6">
-          <h2 className="text-2xl">Why students book on-platform</h2>
-          <p className="mt-2 max-w-2xl text-sm text-ink-secondary">
-            Secure payment records, booking confirmations, a real cancellation and refund
-            process, package tracking and reminders. It’s better for them — and it means
-            your business, payouts and student history live in one place.
-          </p>
+          <h2 className="text-2xl">{t("whyTitle")}</h2>
+          <p className="mt-2 max-w-2xl text-sm text-ink-secondary">{t("whyBody")}</p>
         </div>
       </Reveal>
     </div>

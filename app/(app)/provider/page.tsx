@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { getTranslations, getLocale } from "next-intl/server";
 import { currentUser } from "@/lib/authz";
 import { providerHome, providerDashboardData } from "@/lib/data/provider";
 import { StatCard } from "@/components/ui/StatCard";
@@ -12,79 +13,106 @@ import { formatMoney } from "@/lib/money";
 import { COMMISSION_RATE, PLAN_LIMITS } from "@/lib/config/commerce";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Teacher dashboard" };
+
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("providerDash");
+  return { title: t("metaTitle") };
+}
 
 export default async function ProviderDashboard() {
   const user = await currentUser();
   if (!user) redirect("/login?next=/provider");
   if (user.role !== "PROVIDER") redirect("/dashboard");
 
+  const t = await getTranslations("providerDash");
+  const common = await getTranslations("common");
+  const locale = await getLocale();
+  const loc = locale === "tr" ? "tr-TR" : "en-GB";
+
   const { provider, plan, entitlements } = await providerHome();
   const d = await providerDashboardData(provider.id);
   const isPremium = plan === "PREMIUM";
   const rate = COMMISSION_RATE[plan];
   const next = d.upcoming[0];
+  const planLabel = isPremium ? common("premium") : common("free");
 
   return (
     <div className="space-y-8">
       <Reveal>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl">Today, {provider.displayName.split(" ")[0]}</h1>
+            <h1 className="text-2xl">
+              {t("todayGreeting", { name: provider.displayName.split(" ")[0] })}
+            </h1>
             <p className="text-sm text-ink-secondary">
-              {new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long" }).format(new Date())}
+              {new Intl.DateTimeFormat(loc, {
+                weekday: "long",
+                day: "numeric",
+                month: "long",
+              }).format(new Date())}
             </p>
           </div>
           <Badge tone={isPremium ? "purple" : "neutral"}>
-            {isPremium ? "Premium" : "Free"} · {Math.round(rate * 100)}% commission
+            {t("planBadge", { plan: planLabel, rate: Math.round(rate * 100) })}
           </Badge>
         </div>
       </Reveal>
 
-      {/* Dominant "today" module */}
       <Reveal>
         <Card className="bg-gradient-to-br from-brand-yellow-100/80 to-brand-lavender-100/70">
-          <h2 className="font-serif text-lg">Your next lesson</h2>
+          <h2 className="font-serif text-lg">{t("nextLessonTitle")}</h2>
           {next ? (
             <div className="mt-2">
               <p className="text-2xl font-semibold">
                 {next.scheduledAt
-                  ? new Intl.DateTimeFormat("en-GB", { weekday: "short", hour: "2-digit", minute: "2-digit" }).format(next.scheduledAt)
-                  : "Time to arrange"}
+                  ? new Intl.DateTimeFormat(loc, {
+                      weekday: "short",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    }).format(next.scheduledAt)
+                  : t("timeToArrange")}
               </p>
               <p className="text-sm text-ink-secondary">
-                {next.listing.title} · {next.studentUser?.name ?? "Student"}
+                {next.listing.title} · {next.studentUser?.name ?? common("student")}
               </p>
             </div>
           ) : (
-            <p className="mt-2 text-sm text-ink-secondary">
-              No upcoming lessons. Add availability so students can book you.
-            </p>
+            <p className="mt-2 text-sm text-ink-secondary">{t("noNextLesson")}</p>
           )}
           <div className="mt-4 flex gap-2">
-            <Link href="/provider/calendar" className="rounded-pill bg-brand-purple-600 px-4 py-2 text-sm font-semibold text-white">
-              Open calendar
+            <Link
+              href="/provider/calendar"
+              className="rounded-pill bg-brand-purple-600 px-4 py-2 text-sm font-semibold text-white"
+            >
+              {t("openCalendar")}
             </Link>
-            <Link href="/provider/listings" className="rounded-pill border border-brand-purple-300 px-4 py-2 text-sm font-semibold text-brand-purple-700">
-              Lessons &amp; packages
+            <Link
+              href="/provider/listings"
+              className="rounded-pill border border-brand-purple-300 px-4 py-2 text-sm font-semibold text-brand-purple-700"
+            >
+              {t("lessonsAndPackages")}
             </Link>
           </div>
         </Card>
       </Reveal>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Today’s lessons" value={d.todayLessons.length} tone="yellow" />
+        <StatCard label={t("todaysLessons")} value={d.todayLessons.length} tone="yellow" />
         <StatCard
-          label="Active students"
+          label={t("activeStudents")}
           value={
             Number.isFinite(entitlements.studentsMaxActive)
               ? `${d.activeStudents} / ${entitlements.studentsMaxActive}`
               : d.activeStudents
           }
-          hint={!isPremium && d.activeStudents >= PLAN_LIMITS.FREE.activeStudents ? "Limit reached" : undefined}
+          hint={
+            !isPremium && d.activeStudents >= PLAN_LIMITS.FREE.activeStudents
+              ? t("limitReached")
+              : undefined
+          }
         />
         <StatCard
-          label="Active listings"
+          label={t("activeListings")}
           value={
             Number.isFinite(entitlements.listingsMaxActive)
               ? `${d.activeListings} / ${entitlements.listingsMaxActive}`
@@ -92,16 +120,16 @@ export default async function ProviderDashboard() {
           }
         />
         <StatCard
-          label="Net revenue (30d)"
+          label={t("netRevenue30")}
           tone="lavender"
           value={formatMoney(d.revenue30dNet, provider.currency)}
-          hint={`from ${formatMoney(d.revenue30dGross, provider.currency)} gross`}
+          hint={t("fromGross", { gross: formatMoney(d.revenue30dGross, provider.currency) })}
         />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <section>
-          <h2 className="mb-3 text-lg">Upcoming bookings</h2>
+          <h2 className="mb-3 text-lg">{t("upcomingBookings")}</h2>
           {d.upcoming.length ? (
             <div className="space-y-2">
               {d.upcoming.map((b) => (
@@ -109,9 +137,9 @@ export default async function ProviderDashboard() {
                   <div>
                     <p className="text-sm font-medium">{b.listing.title}</p>
                     <p className="text-xs text-ink-tertiary">
-                      {b.studentUser?.name ?? "Student"}
+                      {b.studentUser?.name ?? common("student")}
                       {b.scheduledAt
-                        ? ` · ${new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(b.scheduledAt)}`
+                        ? ` · ${new Intl.DateTimeFormat(loc, { dateStyle: "medium", timeStyle: "short" }).format(b.scheduledAt)}`
                         : ""}
                     </p>
                   </div>
@@ -119,12 +147,12 @@ export default async function ProviderDashboard() {
               ))}
             </div>
           ) : (
-            <EmptyState glyph="📆" title="No upcoming bookings" description="Bookings from students appear here." />
+            <EmptyState glyph="📆" title={t("noUpcomingTitle")} description={t("noUpcomingBody")} />
           )}
         </section>
 
         <section>
-          <h2 className="mb-3 text-lg">Recent payments</h2>
+          <h2 className="mb-3 text-lg">{t("recentPayments")}</h2>
           {d.recentPayments.length ? (
             <div className="space-y-2">
               {d.recentPayments.map((p) => (
@@ -133,24 +161,27 @@ export default async function ProviderDashboard() {
                     <p className="text-sm font-medium">{p.booking.listing.title}</p>
                     <p className="text-xs text-ink-tertiary">
                       {p.succeededAt
-                        ? new Intl.DateTimeFormat("en-GB", { dateStyle: "medium" }).format(p.succeededAt)
+                        ? new Intl.DateTimeFormat(loc, { dateStyle: "medium" }).format(p.succeededAt)
                         : ""}
                     </p>
                   </div>
                   <div className="text-right">
                     <p className="text-sm font-semibold">{formatMoney(p.providerNet, p.currency)}</p>
                     <p className="text-xs text-ink-tertiary">
-                      net of {formatMoney(p.platformCommission, p.currency)} fee
+                      {t("netOfFee", { fee: formatMoney(p.platformCommission, p.currency) })}
                     </p>
                   </div>
                 </Card>
               ))}
-              <Link href="/provider/earnings" className="text-sm text-brand-purple-700 hover:underline">
-                Full earnings →
+              <Link
+                href="/provider/earnings"
+                className="text-sm text-brand-purple-700 hover:underline"
+              >
+                {t("fullEarnings")} →
               </Link>
             </div>
           ) : (
-            <EmptyState glyph="💸" title="No payments yet" description="Paid bookings show up here." />
+            <EmptyState glyph="💸" title={t("noPaymentsTitle")} description={t("noPaymentsBody")} />
           )}
         </section>
       </div>
@@ -160,14 +191,14 @@ export default async function ProviderDashboard() {
           <Card className="border-brand-purple-200 bg-brand-lavender-100/50">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h3 className="font-serif text-lg">Keep more of what you earn</h3>
-                <p className="text-sm text-ink-secondary">
-                  Premium drops your commission from 12% to 7% and unlocks recurring lessons,
-                  unlimited students and the Growth Dashboard.
-                </p>
+                <h3 className="font-serif text-lg">{t("upsellTitle")}</h3>
+                <p className="text-sm text-ink-secondary">{t("upsellBody")}</p>
               </div>
-              <Link href="/premium" className="rounded-pill bg-brand-yellow-500 px-5 py-2.5 text-sm font-semibold">
-                See Premium
+              <Link
+                href="/premium"
+                className="rounded-pill bg-brand-yellow-500 px-5 py-2.5 text-sm font-semibold"
+              >
+                {t("seePremium")}
               </Link>
             </div>
           </Card>

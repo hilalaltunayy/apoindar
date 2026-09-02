@@ -1,15 +1,23 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { subscribeAction, cancelSubscriptionAction, type ActionResult } from "@/lib/actions/provider";
+import { useTranslations } from "next-intl";
+import {
+  subscribeAction,
+  cancelSubscriptionAction,
+  type ActionResult,
+} from "@/lib/actions/provider";
 import { Button } from "@/components/ui/Button";
 import { SuccessBurst } from "@/components/brand/SuccessBurst";
+import { useActionError } from "@/lib/i18n/action-error";
 
 export function PremiumCta({
   state: planState,
 }: {
   state: "anon" | "student" | "free-provider" | "premium" | "trialing";
 }) {
+  const t = useTranslations("premium");
+  const errText = useActionError();
   const [result, action, pending] = useActionState<ActionResult | null, FormData>(
     subscribeAction,
     null,
@@ -20,9 +28,9 @@ export function PremiumCta({
     return (
       <div className="rounded-xl border border-brand-purple-200 bg-brand-lavender-100/50 p-6 text-center">
         <SuccessBurst />
-        <p className="mt-2 font-serif text-xl">{result.message}</p>
+        <p className="mt-2 font-serif text-xl">{t("activeMessage")}</p>
         <Button href="/provider" className="mt-4">
-          Go to dashboard
+          {t("goToDashboard")}
         </Button>
       </div>
     );
@@ -31,14 +39,17 @@ export function PremiumCta({
   if (planState === "anon") {
     return (
       <Button href="/signup?role=provider" size="lg">
-        Start teaching — then upgrade
+        {t("ctaStartTeaching")}
       </Button>
     );
   }
   if (planState === "student") {
     return (
       <p className="text-sm text-ink-secondary">
-        Premium is for teachers. <a href="/signup?role=provider" className="text-brand-purple-700 underline">Create a teacher account</a> to upgrade.
+        {t("ctaStudentNote")}{" "}
+        <a href="/signup?role=provider" className="text-brand-purple-700 underline">
+          {t("ctaStartTeaching")}
+        </a>
       </p>
     );
   }
@@ -50,10 +61,10 @@ export function PremiumCta({
         }}
       >
         <p className="mb-2 text-sm text-state-success">
-          {planState === "trialing" ? "Your Premium trial is active." : "Premium is active."}
+          {planState === "trialing" ? t("ctaTrialActive") : t("ctaActive")}
         </p>
         <button className="rounded-pill border border-line-soft px-4 py-2 text-sm">
-          Cancel Premium (keeps your data)
+          {t("ctaCancel")}
         </button>
       </form>
     );
@@ -67,23 +78,27 @@ export function PremiumCta({
             key={i}
             type="button"
             onClick={() => setInterval(i)}
-            className={`rounded-pill px-4 py-1.5 ${interval === i ? "bg-brand-purple-600 text-white" : ""}`}
+            className={`rounded-pill px-4 py-1.5 ${
+              interval === i ? "bg-brand-purple-600 text-white" : ""
+            }`}
           >
-            {i === "MONTH" ? "Monthly" : "Annual (2 months free)"}
+            {i === "MONTH" ? t("billingMonthly") : t("billingAnnual")}
           </button>
         ))}
       </div>
       <input type="hidden" name="interval" value={interval} />
       <div className="flex flex-wrap gap-2">
         <Button type="submit" name="mode" value="trial" size="lg" disabled={pending}>
-          {pending ? "…" : "Start 14-day free trial"}
+          {pending ? "…" : t("startTrial")}
         </Button>
         <Button type="submit" name="mode" value="paid" variant="secondary" size="lg" disabled={pending}>
-          Subscribe now
+          {t("subscribeNow")}
         </Button>
       </div>
-      <p className="text-xs text-ink-tertiary">No card required for the trial. Cancel anytime.</p>
-      {result && !result.ok ? <p className="text-sm text-state-danger">{result.error}</p> : null}
+      <p className="text-xs text-ink-tertiary">{t("trialNote")}</p>
+      {result && !result.ok ? (
+        <p className="text-sm text-state-danger">{errText(result)}</p>
+      ) : null}
     </form>
   );
 }

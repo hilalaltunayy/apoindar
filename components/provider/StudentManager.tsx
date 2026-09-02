@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useState, useTransition } from "react";
+import { useActionState, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   addStudentAction,
   setStudentStatusAction,
@@ -12,6 +13,8 @@ import { Input, Textarea, FormField } from "@/components/ui/Field";
 import { Badge } from "@/components/ui/Badge";
 import { Disclosure } from "@/components/ui/Disclosure";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { statusLabel } from "@/lib/i18n/labels";
+import { useActionError } from "@/lib/i18n/action-error";
 
 interface StudentRow {
   id: string;
@@ -37,7 +40,13 @@ export function StudentManager({
   advancedCrm: boolean;
   freeLimitReached: boolean;
 }) {
-  const [state, action, pending] = useActionState<ActionResult | null, FormData>(addStudentAction, null);
+  const t = useTranslations("crm");
+  const st = useTranslations("statusLabels");
+  const errText = useActionError();
+  const [state, action, pending] = useActionState<ActionResult | null, FormData>(
+    addStudentAction,
+    null,
+  );
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"ALL" | "ACTIVE" | "INACTIVE" | "FORMER">("ALL");
 
@@ -47,12 +56,21 @@ export function StudentManager({
       (!advancedCrm || s.fullName.toLowerCase().includes(query.toLowerCase())),
   );
 
+  const filterLabel = (f: string) =>
+    f === "ALL"
+      ? t("filterAll")
+      : f === "ACTIVE"
+        ? t("filterActive")
+        : f === "INACTIVE"
+          ? t("filterInactive")
+          : t("filterFormer");
+
   return (
     <div className="space-y-6">
       {advancedCrm ? (
         <div className="flex flex-wrap gap-2">
           <Input
-            placeholder="Search students…"
+            placeholder={t("searchPlaceholder")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             className="max-w-xs"
@@ -62,10 +80,12 @@ export function StudentManager({
               key={f}
               onClick={() => setFilter(f)}
               className={`rounded-pill px-3 py-1 text-xs font-medium ${
-                filter === f ? "bg-brand-purple-600 text-white" : "bg-brand-lavender-100 text-brand-purple-700"
+                filter === f
+                  ? "bg-brand-purple-600 text-white"
+                  : "bg-brand-lavender-100 text-brand-purple-700"
               }`}
             >
-              {f.toLowerCase()}
+              {filterLabel(f)}
             </button>
           ))}
         </div>
@@ -82,63 +102,77 @@ export function StudentManager({
                   ) : null}
                   <p className="font-medium">{s.fullName}</p>
                 </div>
-                <Badge tone={s.status === "ACTIVE" ? "success" : "neutral"}>{s.status.toLowerCase()}</Badge>
+                <Badge tone={s.status === "ACTIVE" ? "success" : "neutral"}>
+                  {statusLabel(s.status, st)}
+                </Badge>
               </div>
               {(s.email || s.phone) && advancedCrm ? (
-                <p className="mt-1 text-xs text-ink-tertiary">{[s.email, s.phone].filter(Boolean).join(" · ")}</p>
+                <p className="mt-1 text-xs text-ink-tertiary">
+                  {[s.email, s.phone].filter(Boolean).join(" · ")}
+                </p>
               ) : null}
               <p className="mt-1 text-xs text-ink-secondary">
-                {s.lessons} lessons · {s.bookings} bookings
+                {t("lessonsBookings", { lessons: s.lessons, bookings: s.bookings })}
                 {s.lastListing ? ` · ${s.lastListing}` : ""}
               </p>
 
               <div className="mt-3 flex flex-wrap gap-1.5">
                 {(["ACTIVE", "INACTIVE", "FORMER"] as const)
-                  .filter((st) => st !== s.status)
-                  .map((st) => (
-                    <StatusButton key={st} id={s.id} status={st} disabled={st === "ACTIVE" && !canAddActive} />
+                  .filter((x) => x !== s.status)
+                  .map((x) => (
+                    <StatusButton
+                      key={x}
+                      id={s.id}
+                      status={x}
+                      label={t("setStatus", { status: statusLabel(x, st) })}
+                      disabled={x === "ACTIVE" && !canAddActive}
+                    />
                   ))}
               </div>
 
               {advancedCrm ? (
                 <NotesBlock studentId={s.id} notes={s.notes} />
               ) : (
-                <p className="mt-3 text-xs text-ink-tertiary">Private notes are a Premium feature.</p>
+                <p className="mt-3 text-xs text-ink-tertiary">{t("notesPremiumOnly")}</p>
               )}
             </li>
           ))}
         </ul>
       ) : (
-        <EmptyState glyph="🧑‍🎓" title="No students here" description="Add a student to start tracking their lessons." />
+        <EmptyState glyph="🧑‍🎓" title={t("noneTitle")} description={t("noneBody")} />
       )}
 
-      <Disclosure label="+ Add a student" defaultOpen={!students.length}>
+      <Disclosure label={t("addCta")} defaultOpen={!students.length}>
         {freeLimitReached ? (
-          <p className="text-sm text-ink-secondary">
-            You’ve reached the Free limit of 3 active students. Set one to inactive, or{" "}
-            <a href="/premium" className="text-brand-purple-700 underline">
-              upgrade to Premium
-            </a>{" "}
-            for unlimited students. Existing student data is always kept.
-          </p>
+          <p className="text-sm text-ink-secondary">{t("freeLimitBody")}</p>
         ) : (
           <form action={action} className="space-y-3">
-            <FormField label="Full name" required>
+            <FormField label={t("fullName")} required>
               {(p) => <Input {...p} name="fullName" required />}
             </FormField>
             <div className="grid grid-cols-2 gap-3">
-              <FormField label="Email">{(p) => <Input {...p} name="email" type="email" />}</FormField>
-              <FormField label="Phone">{(p) => <Input {...p} name="phone" />}</FormField>
+              <FormField label={t("email")}>{(p) => <Input {...p} name="email" type="email" />}</FormField>
+              <FormField label={t("phone")}>{(p) => <Input {...p} name="phone" />}</FormField>
             </div>
             {advancedCrm ? (
-              <FormField label="Label colour">
-                {(p) => <input {...p} name="labelColor" type="color" defaultValue="#7450A6" className="h-10 w-16 rounded-md border border-line-soft" />}
+              <FormField label={t("labelColour")}>
+                {(p) => (
+                  <input
+                    {...p}
+                    name="labelColor"
+                    type="color"
+                    defaultValue="#7450A6"
+                    className="h-10 w-16 rounded-md border border-line-soft"
+                  />
+                )}
               </FormField>
             ) : null}
-            {state && !state.ok ? <p className="text-sm text-state-danger">{state.error}</p> : null}
-            {state?.ok ? <p className="text-sm text-state-success">{state.message}</p> : null}
+            {state && !state.ok ? (
+              <p className="text-sm text-state-danger">{errText(state)}</p>
+            ) : null}
+            {state?.ok ? <p className="text-sm text-state-success">{t("added")}</p> : null}
             <Button type="submit" disabled={pending}>
-              {pending ? "Adding…" : "Add student"}
+              {pending ? t("adding") : t("addStudent")}
             </Button>
           </form>
         )}
@@ -150,31 +184,34 @@ export function StudentManager({
 function StatusButton({
   id,
   status,
+  label,
   disabled,
 }: {
   id: string;
   status: "ACTIVE" | "INACTIVE" | "FORMER";
+  label: string;
   disabled?: boolean;
 }) {
-  const [pending, start] = useTransition();
-  const [err, setErr] = useState<string | null>(null);
+  const errText = useActionError();
+  const [state, action, pending] = useActionState<ActionResult | null, FormData>(
+    setStudentStatusAction,
+    null,
+  );
   return (
-    <>
+    <form action={action} className="contents">
+      <input type="hidden" name="studentId" value={id} />
+      <input type="hidden" name="status" value={status} />
       <button
+        type="submit"
         disabled={pending || disabled}
-        onClick={() =>
-          start(async () => {
-            setErr(null);
-            const r = await setStudentStatusAction(id, status);
-            if (!r.ok) setErr(r.error);
-          })
-        }
         className="rounded-pill border border-line-soft px-2.5 py-1 text-xs disabled:opacity-40"
       >
-        {pending ? "…" : `Set ${status.toLowerCase()}`}
+        {pending ? "…" : label}
       </button>
-      {err ? <span className="w-full text-xs text-state-danger">{err}</span> : null}
-    </>
+      {state && !state.ok ? (
+        <span className="w-full text-xs text-state-danger">{errText(state)}</span>
+      ) : null}
+    </form>
   );
 }
 
@@ -185,6 +222,9 @@ function NotesBlock({
   studentId: string;
   notes: { id: string; body: string; createdAt: string }[];
 }) {
+  const t = useTranslations("crm");
+  const common = useTranslations("common");
+  const errText = useActionError();
   const [state, action, pending] = useActionState<ActionResult | null, FormData>(
     addStudentNoteAction,
     null,
@@ -202,12 +242,18 @@ function NotesBlock({
       ) : null}
       <form action={action} className="flex gap-2">
         <input type="hidden" name="studentId" value={studentId} />
-        <Textarea name="body" placeholder="Private note…" className="min-h-[2.5rem] flex-1 text-xs" />
+        <Textarea
+          name="body"
+          placeholder={t("notePlaceholder")}
+          className="min-h-[2.5rem] flex-1 text-xs"
+        />
         <Button type="submit" size="sm" variant="secondary" disabled={pending}>
-          Add
+          {common("add")}
         </Button>
       </form>
-      {state && !state.ok ? <p className="mt-1 text-xs text-state-danger">{state.error}</p> : null}
+      {state && !state.ok ? (
+        <p className="mt-1 text-xs text-state-danger">{errText(state)}</p>
+      ) : null}
     </div>
   );
 }
