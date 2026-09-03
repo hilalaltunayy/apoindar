@@ -1,46 +1,72 @@
-# Apoindar Mobile (Phase 3 — not yet implemented)
+# Apoindar Mobile (iOS + Android)
 
-The mobile app is a **dedicated** React Native + Expo client (iOS + Android),
-not a wrapper around the website (`09-mobile-app-ux-spec.md`). It is scheduled
-for Phase E and is **not built yet**.
+React Native + Expo client for Apoindar. Same backend, domain rules and business
+logic as the web app (see `../CLAUDE.md` and docs `01`–`12`). Not a WebView.
 
-## What already makes the backend mobile-ready
+## Stack
 
-The web app was structured so the mobile client can reuse the same backend and
-business logic without a rewrite:
+- Expo SDK 52, React Native 0.76, expo-router (file-based navigation)
+- TypeScript strict (`noUncheckedIndexedAccess`, `noImplicitOverride`)
+- react-native-reanimated + gesture-handler (swipe discovery)
+- expo-secure-store (session token), custom lightweight i18n (TR default / EN)
+- Shared zero-dependency modules from the web repo's `../lib` via the `@shared/*`
+  alias (password policy, commerce constants) — one source of truth
 
-| Shared thing | Location | Portable? |
-| --- | --- | --- |
-| Commercial rules (commission, limits, pricing, trial) | `lib/config/commerce.ts` | ✅ pure TS, zero deps — copy or extract to a shared package |
-| Domain logic (commission split, entitlements, state machines, recurrence, subscription, package credits, workspace gate) | `lib/domain/**` | ✅ pure TS, no Next/Prisma imports |
-| Money helpers | `lib/money.ts` | ✅ pure TS |
-| Validation schemas | `lib/validation/schemas.ts` | ✅ Zod, shareable |
-| Payment adapter contract | `lib/payments/types.ts` | ✅ interface only |
-| Data contracts | Prisma types in `lib/generated/prisma` | ✅ types shareable; client is server-only |
+## Run
 
-Server-side authorization and entitlement enforcement live in `lib/authz.ts` +
-`lib/services/**` and run on the server, so a mobile client gets the same
-guarantees by calling the same endpoints.
-
-## Planned API surface for mobile
-
-Today the web app talks to the server via **server actions** (`lib/actions/**`)
-and a few route handlers (`app/api/**`). Before the mobile client is built, the
-booking / auth / provider actions should be mirrored as a versioned REST/JSON
-API under `app/api/v1/**` that both clients consume. The action functions
-already delegate to `lib/services/**`, so this is a thin transport layer, not a
-logic rewrite.
-
-## Recommended structure when work starts
-
-```
-mobile/
-  app/               expo-router screens (Home, Search, Bookings, Messages, Profile)
-  components/         RN port of the Apoindar design system (same tokens as 07)
-  lib/               thin API client + re-exported shared domain/config
-  app.json           Expo config
+```bash
+cd mobile
+npm install
+# start the Apoindar web/API backend first (repo root): npm run dev
+npm run ios       # or: npm run android
 ```
 
-Subscription entitlement management on mobile may use RevenueCat for App
-Store / Play IAP — **separate** from the marketplace payment provider used for
-student → teacher payments (`CLAUDE.md` §10). Do not mix the two domains.
+For a real device, set `EXPO_PUBLIC_API_URL` (see `.env.example`) and use
+`npx expo start --tunnel`, then open in Expo Go or an EAS dev build.
+
+## Checks
+
+```bash
+npm run typecheck   # tsc --noEmit
+npm run lint        # eslint
+npm test            # jest (pure-logic + guard tests)
+npm run doctor      # npx expo-doctor
+```
+
+## Structure
+
+```
+app/                     expo-router routes
+  _layout.tsx            fonts, providers, deep-link stack
+  index.tsx              branded logo reveal → route by session/role
+  (auth)/                welcome, onboarding, login, signup, forgot-password
+  auth/confirm|reset     email deep-link targets (never bounce to login)
+  (student)/             tabs: home, search, discover, bookings, messages, profile
+  (provider)/            tabs: dashboard, calendar, students, listings, earnings (+premium, more)
+  providers/[id]         provider profile (shared)
+  book/[listingId]       booking + mock checkout
+  workspaces/[id]        purchased-package workspace (chat / tasks / progress / files)
+  favorites, packages, edit-profile, provider-onboarding, settings/*
+src/
+  components/            branded UI kit (Screen, Button, ProviderCard, SwipeDeck, …)
+  i18n/                  tr.ts / en.ts (key-parity enforced by a test)
+  lib/                   api client, auth context, typed queries, hooks
+  theme/                 Apoindar design tokens (mirrors 07-design-system)
+```
+
+## Deep links
+
+- Scheme `apoindar://`; iOS Universal Links + Android App Links on `apoindar.app`.
+- Backend serves `/.well-known/apple-app-site-association` and
+  `/.well-known/assetlinks.json` (fill in `APPLE_TEAM_ID` / `ANDROID_CERT_SHA256`
+  once the app is registered / signed).
+- Email confirm & password-reset links resolve to `auth/confirm` / `auth/reset`
+  which verify the token before routing — they never land on a generic login.
+
+## Not done yet (later phases)
+
+- Real RevenueCat purchasing (Premium UI + entitlement interfaces are in place;
+  no billing). Marketplace lesson/package payments stay a separate domain.
+- Push notifications (foundation only).
+- Simulator/emulator run + real-device verification (no iOS/Android toolchain on
+  the build machine).

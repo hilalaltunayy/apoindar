@@ -1,0 +1,95 @@
+{
+  "expo": {
+    "name": "Apoindar",
+    "slug": "apoindar",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "apoindar",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FBF6EA"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.apoindar.app",
+      "associatedDomains": [
+        "applinks:apoindar.app",
+        "applinks:www.apoindar.app"
+      ],
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.apoindar.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#7B50A6"
+      },
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "apoindar.app",
+              "pathPrefix": "/auth"
+            },
+            {
+              "scheme": "https",
+              "host": "apoindar.app",
+              "pathPrefix": "/providers"
+            },
+            {
+              "scheme": "https",
+              "host": "apoindar.app",
+              "pathPrefix": "/bookings"
+            },
+            {
+              "scheme": "https",
+              "host": "apoindar.app",
+              "pathPrefix": "/workspaces"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-localization",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#FBF6EA",
+          "image": "./assets/splash.png",
+          "imageWidth": 200
+        }
+      ],
+      "expo-font",
+      "@react-native-community/datetimepicker"
+    ],
+    "experiments": {
+      "typedRoutes": false
+    },
+    "extra": {
+      "apiBaseUrl": "http://localhost:3000"
+    }
+  }
+}
