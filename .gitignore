@@ -31,6 +31,12 @@ test-results/
 mobile/node_modules/
 mobile/.expo/
 mobile/dist/
+mobile/web-build/
+mobile/ios/
+mobile/android/
+mobile/expo-env.d.ts
+*.keystore
+*.jks
 
 # OS / editor
 .DS_Store

@@ -5,6 +5,7 @@ import {
   resetPassword,
   changePassword,
   confirmEmail,
+  sendEmailVerification,
 } from "@/lib/services/password";
 import {
   forgotPasswordSchema,
@@ -19,6 +20,7 @@ const bodySchema = z.discriminatedUnion("action", [
   resetPasswordSchema.extend({ action: z.literal("reset") }),
   changePasswordSchema.extend({ action: z.literal("change") }),
   z.object({ action: z.literal("confirm_email"), token: z.string().min(10) }),
+  z.object({ action: z.literal("resend_verify") }),
 ]);
 
 /**
@@ -46,6 +48,13 @@ export const POST = route({ body: bodySchema, auth: false }, async ({ body, req 
       const user = await authenticate(req);
       const r = await changePassword(user.id, body.currentPassword, body.newPassword);
       return r.ok ? { ok: true } : { ok: false, code: r.code };
+    }
+
+    case "resend_verify": {
+      const { authenticate } = await import("@/lib/mobile-api/handler");
+      const user = await authenticate(req);
+      await sendEmailVerification(user.id);
+      return { ok: true };
     }
   }
 });

@@ -32,7 +32,6 @@ export async function sendEmail(input: SendEmailInput): Promise<void> {
 }
 
 async function deliver(msg: { to: string; subject: string; link: string; template: Template }) {
-  // eslint-disable-next-line no-console
   console.info(
     `\n📧 [email:${msg.template}] to=${msg.to}\n   ${msg.subject}\n   ${msg.link}\n`,
   );
