@@ -122,26 +122,57 @@ enum ModerationStatus {
 // ─────────────────────── Auth.js core ────────────────────────
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String    @unique
-  emailVerified DateTime?
-  image         String?
-  role          UserRole  @default(STUDENT)
-  passwordHash  String? // credentials provider (dev)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                String    @id @default(cuid())
+  name              String?
+  email             String    @unique
+  emailVerified     DateTime?
+  image             String?
+  role              UserRole  @default(STUDENT)
+  passwordHash      String? // credentials provider (dev)
+  passwordChangedAt DateTime? // sessions issued before this are invalid
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   accounts Account[]
   sessions Session[]
 
-  provider        Provider?
-  studentProfiles StudentProfile[]
-  bookings       Booking[]        @relation("StudentBookings")
-  notifications  Notification[]
-  complaints     Complaint[]      @relation("ComplaintReporter")
+  provider             Provider?
+  studentProfiles      StudentProfile[]
+  bookings             Booking[]             @relation("StudentBookings")
+  notifications        Notification[]
+  complaints           Complaint[]           @relation("ComplaintReporter")
+  authTokens           AuthToken[]
+  favorites            Favorite[]
+  recommendationEvents RecommendationEvent[]
+  studentWorkspaces    Workspace[]           @relation("StudentWorkspaces")
+  workspaceMessages    WorkspaceMessage[]
 
   @@map("users")
+}
+
+enum AuthTokenKind {
+  EMAIL_VERIFY
+  PASSWORD_RESET
+}
+
+/**
+ * Single-use tokens for email confirmation and password reset (12 §4.2–4.3).
+ * Only the SHA-256 hash of the token is stored; the raw token travels by email
+ * / deep link. Consumed by setting `usedAt`.
+ */
+model AuthToken {
+  id        String        @id @default(cuid())
+  userId    String
+  kind      AuthTokenKind
+  tokenHash String        @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime      @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, kind])
+  @@map("auth_tokens")
 }
 
 model Account {
@@ -218,6 +249,13 @@ model Provider {
   moderationStatus ModerationStatus @default(PENDING)
   published        Boolean          @default(false)
   onboardingStep   Int              @default(0)
+  languages        String[]         @default([]) // ISO codes, e.g. ["tr","en"] — search filter (12 §10)
+  ratingAvg        Float? // denormalized; reviews are a later phase
+  ratingCount      Int              @default(0)
+  // Paid promotion (12 §9) — INACTIVE. Presence of a live promotedUntil marks a
+  // card as promoted; ranking stays organic until this is deliberately enabled.
+  promotedUntil    DateTime?
+  promotionTier    String?
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
 
@@ -233,10 +271,178 @@ model Provider {
   payouts              ProviderPayout[]
   subscription         Subscription?
   studentNotes         StudentNote[]
+  favoritedBy          Favorite[]
+  recommendationEvents RecommendationEvent[]
+  workspaces           Workspace[]
 
   @@index([city, district])
   @@index([plan, published])
+  @@index([promotedUntil])
   @@map("providers")
+}
+
+// ─────────────────── Favorites (12 §11) ──────────────────────
+
+model Favorite {
+  id         String   @id @default(cuid())
+  userId     String
+  providerId String
+  createdAt  DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, providerId])
+  @@index([userId])
+  @@map("favorites")
+}
+
+// ───────────── Recommendation signal log (12 §8) ─────────────
+
+enum RecommendationEventType {
+  SWIPE_INTERESTED
+  SWIPE_SKIP
+  FAVORITE_ADD
+  FAVORITE_REMOVE
+  PROFILE_OPEN
+  SEARCH
+  CATEGORY_VIEW
+  CITY_VIEW
+  BOOKING_CREATED
+  PACKAGE_PURCHASED
+}
+
+/**
+ * Append-only signal log for a future recommender. NOT consumed by ranking yet
+ * (12 §8) — just a clean domain boundary so the data exists.
+ */
+model RecommendationEvent {
+  id         String                  @id @default(cuid())
+  userId     String
+  type       RecommendationEventType
+  providerId String?
+  categorySlug String?
+  city       String?
+  query      String?
+  metadata   Json?
+  platform   String? // "web" | "ios" | "android"
+  createdAt  DateTime                @default(now())
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider Provider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+
+  @@index([userId, type])
+  @@index([userId, createdAt])
+  @@map("recommendation_events")
+}
+
+// ─────── Paid student↔provider workspace (12 §12) ────────────
+
+enum WorkspaceStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum WorkspaceTaskStatus {
+  OPEN
+  SUBMITTED
+  DONE
+}
+
+/**
+ * Unlocked ONLY by a successful eligible paid booking/package (isWorkspaceEligible).
+ * Access is purchase-gated server-side; the same gate runs on web + mobile.
+ * Deliberately lightweight — not an LMS (12 §12).
+ */
+model Workspace {
+  id            String          @id @default(cuid())
+  providerId    String
+  studentUserId String
+  bookingId     String?         @unique
+  status        WorkspaceStatus @default(ACTIVE)
+  goal          String? // lesson-to-lesson goal / package goal
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  provider    Provider           @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  studentUser User               @relation("StudentWorkspaces", fields: [studentUserId], references: [id], onDelete: Cascade)
+  booking     Booking?           @relation(fields: [bookingId], references: [id])
+  messages    WorkspaceMessage[]
+  tasks       WorkspaceTask[]
+  notes       WorkspaceNote[]
+  milestones  WorkspaceMilestone[]
+  resources   WorkspaceResource[]
+
+  @@unique([providerId, studentUserId])
+  @@index([studentUserId])
+  @@map("workspaces")
+}
+
+model WorkspaceMessage {
+  id          String   @id @default(cuid())
+  workspaceId String
+  senderId    String
+  body        String
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  sender    User      @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@map("workspace_messages")
+}
+
+model WorkspaceTask {
+  id          String              @id @default(cuid())
+  workspaceId String
+  title       String
+  detail      String?
+  dueAt       DateTime?
+  status      WorkspaceTaskStatus @default(OPEN)
+  feedback    String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status])
+  @@map("workspace_tasks")
+}
+
+model WorkspaceNote {
+  id          String   @id @default(cuid())
+  workspaceId String
+  body        String // provider progress note
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("workspace_notes")
+}
+
+model WorkspaceMilestone {
+  id          String    @id @default(cuid())
+  workspaceId String
+  title       String
+  reachedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("workspace_milestones")
+}
+
+model WorkspaceResource {
+  id          String   @id @default(cuid())
+  workspaceId String
+  title       String
+  url         String // Supabase Storage path / link
+  kind        String   @default("file")
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("workspace_resources")
 }
 
 model ProviderCategory {
@@ -375,6 +581,7 @@ model Booking {
   payment         Payment?
   packageCredit   PackageCredit?
   lessonInstances LessonInstance[]
+  workspace       Workspace?
 
   @@index([providerId, status])
   @@index([studentUserId, status])

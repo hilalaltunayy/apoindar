@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { signIn } from "@/lib/auth";
 import { hashPassword } from "@/lib/auth-password";
 import { signupSchema, loginSchema } from "@/lib/validation/schemas";
+import { sendEmailVerification } from "@/lib/services/password";
 
 /**
  * Actions return stable error *codes* (not localized text) so the client can
@@ -18,6 +19,7 @@ export type FormState = {
     | "WRONG_CREDENTIALS"
     | "INVALID_LOGIN"
     | "INVALID_SIGNUP"
+    | "PASSWORD_POLICY"
     | "UNKNOWN";
   fields?: string[];
 };
@@ -30,7 +32,11 @@ export async function signupAction(_prev: FormState, formData: FormData): Promis
     role: formData.get("role") ?? "STUDENT",
   });
   if (!parsed.success) {
-    return { code: "INVALID_SIGNUP", fields: Object.keys(parsed.error.flatten().fieldErrors) };
+    const flat = parsed.error.flatten().fieldErrors;
+    if (flat.password?.includes("PASSWORD_POLICY")) {
+      return { code: "PASSWORD_POLICY", fields: ["password"] };
+    }
+    return { code: "INVALID_SIGNUP", fields: Object.keys(flat) };
   }
   const { name, email, password, role } = parsed.data;
   const normalizedEmail = email.trim().toLowerCase();
@@ -52,6 +58,8 @@ export async function signupAction(_prev: FormState, formData: FormData): Promis
       data: { userId: user.id, displayName: name.trim(), onboardingStep: 1 },
     });
   }
+
+  await sendEmailVerification(user.id);
 
   try {
     await signIn("credentials", {

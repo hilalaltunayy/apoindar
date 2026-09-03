@@ -66,7 +66,11 @@ export async function ProviderCard({
             <p className="mt-0.5 line-clamp-2 text-sm text-ink-secondary">{provider.headline}</p>
           ) : null}
           <p className="mt-1 text-xs text-ink-tertiary">
-            {provider.categories.slice(0, 2).join(" · ") || common("teacher")} • {location}
+            {provider.categories
+              .slice(0, 2)
+              .map((c) => c.name)
+              .join(" · ") || common("teacher")}{" "}
+            • {location}
           </p>
         </div>
       </div>

@@ -117,7 +117,15 @@
     "workspaceKicker": "Coming later",
     "workspaceTitle": "A shared space after your first paid lesson",
     "workspaceBody": "Once you complete a paid lesson or package, a private student–teacher workspace opens up: assignments, progress and mentorship between lessons.",
-    "searchExamples": ["Physics", "Swimming", "Pilates", "Mathematics", "English", "French", "Kindergarten Activities"]
+    "searchExamples": [
+      "Physics",
+      "Swimming",
+      "Pilates",
+      "Mathematics",
+      "English",
+      "French",
+      "Kindergarten Activities"
+    ]
   },
   "searchField": {
     "what": "What do you want to learn?",
@@ -188,7 +196,8 @@
     "errorExists": "An account with this email already exists.",
     "errorCreatedLogin": "Account created — please log in.",
     "errorWrongCredentials": "Wrong email or password.",
-    "errorInvalidLogin": "Enter a valid email and password."
+    "errorInvalidLogin": "Enter a valid email and password.",
+    "forgotPassword": "Forgot password?"
   },
   "booking": {
     "metaTitle": "Book a lesson",
@@ -735,5 +744,53 @@
     "writeNote": "Write a note first.",
     "validRefund": "Enter a valid refund amount.",
     "packageLessons": "Packages need more than one lesson; single lessons must be exactly one."
+  },
+  "passwordPolicy": {
+    "label": "Password must contain",
+    "length": "At least 8 characters",
+    "lower": "One lowercase letter",
+    "upper": "One uppercase letter",
+    "number": "One number",
+    "symbol": "One symbol (. ! ? @ #)",
+    "met": "met",
+    "notMet": "not met"
+  },
+  "authLinks": {
+    "missingToken": "This link is missing its token.",
+    "linkInvalidTitle": "This link is no longer valid",
+    "linkInvalidBody": "The link has expired or was already used. Request a new one.",
+    "requestNew": "Request a new link",
+    "requestNewLink": "Request a new link",
+    "confirmOkTitle": "Email confirmed",
+    "confirmOkBody": "Your email is verified. You can log in now.",
+    "confirmFailTitle": "Could not confirm",
+    "toLogin": "Go to login",
+    "toSignup": "Sign up again",
+    "home": "Back to home",
+    "resetTitle": "Choose a new password",
+    "resetBody": "Enter a new password for your account.",
+    "newPassword": "New password",
+    "resetCta": "Update password",
+    "working": "Working…",
+    "policyError": "That password does not meet the requirements.",
+    "forgotTitle": "Reset your password",
+    "forgotBody": "Enter your email and we will send a reset link.",
+    "email": "Email",
+    "forgotCta": "Send reset link",
+    "forgotSentTitle": "Check your email",
+    "forgotSentBody": "If an account exists for that email, a reset link is on its way.",
+    "invalidEmail": "Enter a valid email address."
+  },
+  "security": {
+    "metaTitle": "Security",
+    "title": "Security",
+    "changePassword": "Change password",
+    "currentPassword": "Current password",
+    "newPassword": "New password",
+    "changeCta": "Update password",
+    "changed": "Password updated.",
+    "wrongCurrent": "Your current password is incorrect.",
+    "policyError": "The new password does not meet the requirements.",
+    "sessionNote": "Changing your password signs out other devices."
   }
 }

@@ -117,7 +117,17 @@
     "workspaceKicker": "İleride geliyor",
     "workspaceTitle": "İlk ücretli dersinden sonra ortak bir alan",
     "workspaceBody": "Ücretli bir dersi veya paketi tamamladığında, öğrenci ile eğitmen arasında özel bir çalışma alanı açılır: ödevler, ilerleme ve dersler arası mentorluk.",
-    "searchExamples": ["Fizik", "Yüzme", "Pilates", "Matematik", "İngilizce", "Fransızca", "Gitar", "Resim", "YKS hazırlık"]
+    "searchExamples": [
+      "Fizik",
+      "Yüzme",
+      "Pilates",
+      "Matematik",
+      "İngilizce",
+      "Fransızca",
+      "Gitar",
+      "Resim",
+      "YKS hazırlık"
+    ]
   },
   "searchField": {
     "what": "Ne öğrenmek istiyorsun?",
@@ -188,7 +198,8 @@
     "errorExists": "Bu e-posta ile zaten bir hesap var.",
     "errorCreatedLogin": "Hesap oluşturuldu — lütfen giriş yap.",
     "errorWrongCredentials": "E-posta veya şifre hatalı.",
-    "errorInvalidLogin": "Geçerli bir e-posta ve şifre gir."
+    "errorInvalidLogin": "Geçerli bir e-posta ve şifre gir.",
+    "forgotPassword": "Şifreni mi unuttun?"
   },
   "booking": {
     "metaTitle": "Ders al",
@@ -735,5 +746,53 @@
     "writeNote": "Önce bir not yaz.",
     "validRefund": "Geçerli bir iade tutarı gir.",
     "packageLessons": "Paketlerde birden fazla ders olmalı; tek derste tam olarak bir ders olmalı."
+  },
+  "passwordPolicy": {
+    "label": "Şifre şunları içermeli",
+    "length": "En az 8 karakter",
+    "lower": "Bir küçük harf",
+    "upper": "Bir büyük harf",
+    "number": "Bir rakam",
+    "symbol": "Bir sembol (. ! ? @ #)",
+    "met": "tamam",
+    "notMet": "eksik"
+  },
+  "authLinks": {
+    "missingToken": "Bu bağlantıda anahtar eksik.",
+    "linkInvalidTitle": "Bu bağlantı artık geçerli değil",
+    "linkInvalidBody": "Bağlantının süresi dolmuş ya da daha önce kullanılmış. Yeni bir tane iste.",
+    "requestNew": "Yeni bağlantı iste",
+    "requestNewLink": "Yeni bağlantı iste",
+    "confirmOkTitle": "E-posta doğrulandı",
+    "confirmOkBody": "E-postan doğrulandı. Artık giriş yapabilirsin.",
+    "confirmFailTitle": "Doğrulanamadı",
+    "toLogin": "Girişe git",
+    "toSignup": "Tekrar kaydol",
+    "home": "Ana sayfaya dön",
+    "resetTitle": "Yeni bir şifre seç",
+    "resetBody": "Hesabın için yeni bir şifre gir.",
+    "newPassword": "Yeni şifre",
+    "resetCta": "Şifreyi güncelle",
+    "working": "İşleniyor…",
+    "policyError": "Bu şifre gereksinimleri karşılamıyor.",
+    "forgotTitle": "Şifreni sıfırla",
+    "forgotBody": "E-postanı gir, sana bir sıfırlama bağlantısı gönderelim.",
+    "email": "E-posta",
+    "forgotCta": "Sıfırlama bağlantısı gönder",
+    "forgotSentTitle": "E-postanı kontrol et",
+    "forgotSentBody": "Bu e-postaya ait bir hesap varsa, sıfırlama bağlantısı yolda.",
+    "invalidEmail": "Geçerli bir e-posta adresi gir."
+  },
+  "security": {
+    "metaTitle": "Güvenlik",
+    "title": "Güvenlik",
+    "changePassword": "Şifre değiştir",
+    "currentPassword": "Mevcut şifre",
+    "newPassword": "Yeni şifre",
+    "changeCta": "Şifreyi güncelle",
+    "changed": "Şifre güncellendi.",
+    "wrongCurrent": "Mevcut şifren hatalı.",
+    "policyError": "Yeni şifre gereksinimleri karşılamıyor.",
+    "sessionNote": "Şifreni değiştirmek diğer cihazlardaki oturumları kapatır."
   }
 }

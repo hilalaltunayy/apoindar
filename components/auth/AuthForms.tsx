@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -8,11 +8,13 @@ import { signupAction, loginAction, type FormState } from "@/lib/actions/auth";
 import { Button } from "@/components/ui/Button";
 import { Input, FormField } from "@/components/ui/Field";
 import { PasswordInput } from "@/components/ui/PasswordInput";
+import { PasswordCriteria } from "@/components/auth/PasswordCriteria";
 
 const initial: FormState = {};
 
 function useErrorText() {
   const t = useTranslations("auth");
+  const tp = useTranslations("authLinks");
   return (state: FormState): string | undefined => {
     switch (state.code) {
       case "EMAIL_EXISTS":
@@ -21,9 +23,10 @@ function useErrorText() {
         return t("errorCreatedLogin");
       case "WRONG_CREDENTIALS":
         return t("errorWrongCredentials");
+      case "PASSWORD_POLICY":
+        return tp("policyError");
       case "INVALID_LOGIN":
       case "INVALID_SIGNUP":
-        return t("errorInvalidLogin");
       case "UNKNOWN":
         return t("errorInvalidLogin");
       default:
@@ -37,10 +40,13 @@ export function SignupForm() {
   const params = useSearchParams();
   const presetProvider = params.get("role") === "provider";
   const [state, action, pending] = useActionState(signupAction, initial);
+  const [pw, setPw] = useState("");
   const errorText = useErrorText();
   const err = errorText(state);
   const fieldErr = (name: string) =>
-    state.fields?.includes(name) ? t("errorInvalidLogin") : undefined;
+    state.fields?.includes(name) && state.code !== "PASSWORD_POLICY"
+      ? t("errorInvalidLogin")
+      : undefined;
 
   return (
     <form action={action} className="space-y-4">
@@ -66,11 +72,20 @@ export function SignupForm() {
       <FormField label={t("email")} required error={fieldErr("email")}>
         {(p) => <Input {...p} name="email" type="email" autoComplete="email" required />}
       </FormField>
-      <FormField label={t("password")} required hint={t("passwordHint")} error={fieldErr("password")}>
+      <FormField label={t("password")} required error={fieldErr("password")}>
         {(p) => (
-          <PasswordInput {...p} name="password" autoComplete="new-password" required minLength={8} />
+          <PasswordInput
+            {...p}
+            name="password"
+            autoComplete="new-password"
+            required
+            minLength={8}
+            value={pw}
+            onChange={(e) => setPw(e.target.value)}
+          />
         )}
       </FormField>
+      <PasswordCriteria value={pw} />
 
       {err ? <p className="text-sm text-state-danger">{err}</p> : null}
 
@@ -108,6 +123,11 @@ export function LoginForm() {
       <FormField label={t("password")} required>
         {(p) => <PasswordInput {...p} name="password" autoComplete="current-password" required />}
       </FormField>
+      <div className="text-right">
+        <Link href="/forgot-password" className="text-xs text-brand-purple-700 hover:underline">
+          {t("forgotPassword")}
+        </Link>
+      </div>
       {err ? <p className="text-sm text-state-danger">{err}</p> : null}
       <Button type="submit" className="w-full" disabled={pending}>
         {pending ? t("loggingIn") : t("logIn")}

@@ -13,8 +13,14 @@ export interface ProviderCardData {
   photoUrl: string | null;
   startingPrice: number | null;
   currency: string;
-  categories: string[];
+  categories: { name: string; slug: string }[];
   plan: "FREE" | "PREMIUM";
+  languages: string[];
+  ratingAvg: number | null;
+  ratingCount: number;
+  yearsExperience: number | null;
+  /** Paid-promotion marker (12 §9). Always false until promotion is enabled. */
+  promoted: boolean;
 }
 
 const cardSelect = {
@@ -28,10 +34,15 @@ const cardSelect = {
   startingPrice: true,
   currency: true,
   plan: true,
-  categories: { select: { category: { select: { name: true } } } },
+  languages: true,
+  ratingAvg: true,
+  ratingCount: true,
+  yearsExperience: true,
+  promotedUntil: true,
+  categories: { select: { category: { select: { name: true, slug: true } } } },
 } as const;
 
-function toCard(row: {
+type CardRow = {
   id: string;
   displayName: string;
   headline: string | null;
@@ -42,14 +53,28 @@ function toCard(row: {
   startingPrice: number | null;
   currency: string;
   plan: "FREE" | "PREMIUM";
-  categories: { category: { name: string } }[];
-}): ProviderCardData {
+  languages: string[];
+  ratingAvg: number | null;
+  ratingCount: number;
+  yearsExperience: number | null;
+  promotedUntil: Date | null;
+  categories: { category: { name: string; slug: string } }[];
+};
+
+function toCard(row: CardRow): ProviderCardData {
+  const { promotedUntil, categories, ...rest } = row;
   return {
-    ...row,
-    categories: row.categories.map((c) => c.category.name),
+    ...rest,
+    categories: categories.map((c) => c.category),
+    promoted: !!promotedUntil && promotedUntil > new Date(),
   };
 }
 
+/**
+ * Search / filter contract (12 §10). `q`, `categorySlug`, `city` are live;
+ * the rest are architected — some already query, some are accepted no-ops until
+ * the supporting data (reviews, availability index) lands.
+ */
 export interface SearchParams {
   q?: string;
   city?: string;
@@ -57,31 +82,42 @@ export interface SearchParams {
   minPrice?: number;
   maxPrice?: number;
   mode?: "ONLINE" | "IN_PERSON";
-  sort?: "relevance" | "price_asc" | "price_desc";
+  language?: string; // ISO code
+  minRating?: number;
+  minExperience?: number;
+  listingKind?: "SINGLE_LESSON" | "PACKAGE";
+  sort?: "relevance" | "price_asc" | "price_desc" | "rating";
   page?: number;
+  pageSize?: number;
 }
 
 const PAGE_SIZE = 12;
 
-export async function searchProviders(params: SearchParams): Promise<{
+export interface SearchResult {
   results: ProviderCardData[];
   total: number;
   page: number;
   pageSize: number;
-}> {
+  /** Kept separate so promoted placement can be layered in later (12 §9). */
+  promotedIds: string[];
+}
+
+export async function searchProviders(params: SearchParams): Promise<SearchResult> {
   const page = Math.max(1, params.page ?? 1);
+  const pageSize = Math.min(50, Math.max(1, params.pageSize ?? PAGE_SIZE));
 
   return safeQuery(
     async () => {
-      const where: Record<string, unknown> = {
-        published: true,
-        moderationStatus: "APPROVED",
-      };
-      if (params.city && params.city.toLowerCase() !== "online") {
+      const where: Record<string, unknown> = { published: true, moderationStatus: "APPROVED" };
+
+      if (params.city && params.city.toLowerCase() !== "online" && params.city.toLowerCase() !== "online") {
         where.city = { equals: params.city, mode: "insensitive" };
       }
       if (params.mode === "ONLINE") where.deliveryMode = { in: ["ONLINE", "BOTH"] };
       if (params.mode === "IN_PERSON") where.deliveryMode = { in: ["IN_PERSON", "BOTH"] };
+      if (params.language) where.languages = { has: params.language.toLowerCase() };
+      if (params.minRating != null) where.ratingAvg = { gte: params.minRating };
+      if (params.minExperience != null) where.yearsExperience = { gte: params.minExperience };
       if (params.q) {
         where.OR = [
           { displayName: { contains: params.q, mode: "insensitive" } },
@@ -99,29 +135,48 @@ export async function searchProviders(params: SearchParams): Promise<{
           ...(params.maxPrice != null ? { lte: params.maxPrice } : {}),
         };
       }
+      if (params.listingKind) {
+        where.listings = { some: { status: "ACTIVE", kind: params.listingKind } };
+      }
 
+      // Ranking. Promoted providers would be prepended here in a future step; for
+      // now everything is organic and promoted providers just sort first among
+      // equals via `promotedUntil`.
       const orderBy =
         params.sort === "price_asc"
           ? [{ startingPrice: "asc" as const }]
           : params.sort === "price_desc"
             ? [{ startingPrice: "desc" as const }]
-            : // relevance: Premium gets a *controlled* nudge only, Free stays discoverable (10 §13)
-              [{ plan: "desc" as const }, { updatedAt: "desc" as const }];
+            : params.sort === "rating"
+              ? [{ ratingAvg: "desc" as const }, { ratingCount: "desc" as const }]
+              : // relevance: promoted → Premium nudge → freshness (Free stays discoverable, 10 §13)
+                [
+                  { promotedUntil: "desc" as const },
+                  { plan: "desc" as const },
+                  { updatedAt: "desc" as const },
+                ];
 
       const [rows, total] = await Promise.all([
         prisma.provider.findMany({
           where,
           select: cardSelect,
           orderBy,
-          skip: (page - 1) * PAGE_SIZE,
-          take: PAGE_SIZE,
+          skip: (page - 1) * pageSize,
+          take: pageSize,
         }),
         prisma.provider.count({ where }),
       ]);
 
-      return { results: rows.map(toCard), total, page, pageSize: PAGE_SIZE };
+      const results = rows.map(toCard);
+      return {
+        results,
+        total,
+        page,
+        pageSize,
+        promotedIds: results.filter((r) => r.promoted).map((r) => r.id),
+      };
     },
-    { results: [], total: 0, page, pageSize: PAGE_SIZE },
+    { results: [], total: 0, page, pageSize, promotedIds: [] },
   );
 }
 
@@ -130,7 +185,7 @@ export async function featuredProviders(limit = 6): Promise<ProviderCardData[]> 
     const rows = await prisma.provider.findMany({
       where: { published: true, moderationStatus: "APPROVED" },
       select: cardSelect,
-      orderBy: [{ plan: "desc" }, { updatedAt: "desc" }],
+      orderBy: [{ promotedUntil: "desc" }, { plan: "desc" }, { updatedAt: "desc" }],
       take: limit,
     });
     return rows.map(toCard);

@@ -6,6 +6,8 @@ import { computeCommission } from "@/lib/domain/commission";
 import { effectivePlan } from "@/lib/domain/subscription";
 import { getPaymentAdapter } from "@/lib/payments";
 import { AuthorizationError } from "@/lib/authz";
+import { ensureWorkspaceForBooking } from "@/lib/services/workspace";
+import { logRecommendationEvent } from "@/lib/services/recommendation";
 
 export const DEFAULT_CANCELLATION_POLICY =
   "Free cancellation up to 24h before the lesson. Within 24h, the lesson is non-refundable unless the teacher agrees.";
@@ -216,6 +218,17 @@ export async function settlePayment(params: {
       },
     ],
   });
+
+  // Cross-platform side effects (12 §8, §12): unlock the private workspace for
+  // an eligible paid relationship, and persist recommendation signals.
+  if (booking.studentUserId) {
+    await ensureWorkspaceForBooking(booking.id);
+    await logRecommendationEvent({
+      userId: booking.studentUserId,
+      type: listing?.kind === "PACKAGE" ? "PACKAGE_PURCHASED" : "BOOKING_CREATED",
+      providerId: booking.providerId,
+    });
+  }
 
   return { booking: result.confirmed, payment: result.payment, alreadySettled: false };
 }

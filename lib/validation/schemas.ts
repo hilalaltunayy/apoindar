@@ -1,10 +1,17 @@
 import { z } from "zod";
+import { isValidPassword } from "@/lib/domain/password-policy";
+
+/** Shared strong-password field (12 §4.1) — enforced server-side everywhere. */
+export const strongPassword = z
+  .string()
+  .max(200)
+  .refine(isValidPassword, { message: "PASSWORD_POLICY" });
 
 export const signupSchema = z
   .object({
     name: z.string().min(2).max(80),
     email: z.string().email(),
-    password: z.string().min(8).max(200),
+    password: strongPassword,
     role: z.enum(["STUDENT", "PROVIDER"]).default("STUDENT"),
   })
   .strict();
@@ -15,6 +22,22 @@ export const loginSchema = z
     password: z.string().min(1),
   })
   .strict();
+
+export const resetPasswordSchema = z
+  .object({
+    token: z.string().min(10),
+    password: strongPassword,
+  })
+  .strict();
+
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1),
+    newPassword: strongPassword,
+  })
+  .strict();
+
+export const forgotPasswordSchema = z.object({ email: z.string().email() }).strict();
 
 export const providerOnboardingSchema = z
   .object({
