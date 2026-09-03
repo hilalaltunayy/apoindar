@@ -1,0 +1,39 @@
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Claude Code local (machine-specific, may contain tokens)
+.claude/settings.local.json
+
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Next.js
+.next/
+out/
+build/
+next-env.d.ts
+*.tsbuildinfo
+
+# Prisma generated client
+lib/generated/
+
+# Test / tooling output
+coverage/
+playwright-report/
+test-results/
+.vitest/
+
+# Mobile (Expo)
+mobile/node_modules/
+mobile/.expo/
+mobile/dist/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log
+.vercel

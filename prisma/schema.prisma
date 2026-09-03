@@ -1,0 +1,615 @@
+// Apoindar — Prisma schema
+// Sources of truth: 04-technical-architecture-and-stack.md (entities),
+// 10-business-rules-and-premium.md (commercial), 03 (monetization entities).
+// Money is stored as integer minor units (kuruş) + ISO currency to avoid float drift.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─────────────────────────── Enums ───────────────────────────
+
+enum UserRole {
+  STUDENT
+  PROVIDER
+  ADMIN
+}
+
+enum ProviderPlan {
+  FREE
+  PREMIUM
+}
+
+enum ListingKind {
+  SINGLE_LESSON
+  PACKAGE
+}
+
+enum ListingStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE // retained but not sellable (e.g. after downgrade)
+}
+
+enum DeliveryMode {
+  ONLINE
+  IN_PERSON
+  BOTH
+}
+
+enum StudentStatus {
+  ACTIVE
+  INACTIVE
+  FORMER
+}
+
+enum BookingStatus {
+  PENDING_PAYMENT
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  REFUNDED
+  NO_SHOW
+}
+
+enum PaymentStatus {
+  REQUIRES_PAYMENT
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+enum PaymentAttemptStatus {
+  CREATED
+  PROCESSING
+  SUCCEEDED
+  FAILED
+}
+
+enum RefundStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
+enum PayoutStatus {
+  PENDING
+  IN_TRANSIT
+  PAID
+  FAILED
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELLED // set to cancel; entitlements remain until periodEnd
+  EXPIRED
+}
+
+enum BillingInterval {
+  MONTH
+  YEAR
+}
+
+enum LessonInstanceStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum RecurrenceFrequency {
+  WEEKLY
+}
+
+enum ModerationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// ─────────────────────── Auth.js core ────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  role          UserRole  @default(STUDENT)
+  passwordHash  String? // credentials provider (dev)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts Account[]
+  sessions Session[]
+
+  provider        Provider?
+  studentProfiles StudentProfile[]
+  bookings       Booking[]        @relation("StudentBookings")
+  notifications  Notification[]
+  complaints     Complaint[]      @relation("ComplaintReporter")
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ─────────────────── Marketplace: providers ──────────────────
+
+model EducationCategory {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String
+  group     String // Academic | Languages | Sports | Music | Art & Design | Exam Preparation
+  icon      String?
+  sortOrder Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  listings  Listing[]
+  providers ProviderCategory[]
+
+  @@map("education_categories")
+}
+
+model Provider {
+  id               String           @id @default(cuid())
+  userId           String           @unique
+  displayName      String
+  headline         String?
+  bio              String?
+  city             String?
+  district         String?
+  deliveryMode     DeliveryMode     @default(BOTH)
+  startingPrice    Int? // minor units, denormalized from cheapest active listing
+  currency         String           @default("TRY")
+  photoUrl         String?
+  yearsExperience  Int?
+  plan             ProviderPlan     @default(FREE)
+  moderationStatus ModerationStatus @default(PENDING)
+  published        Boolean          @default(false)
+  onboardingStep   Int              @default(0)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  user                 User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categories           ProviderCategory[]
+  listings             Listing[]
+  availability         AvailabilitySlot[]
+  availabilityTemplates AvailabilityTemplate[]
+  students             StudentProfile[]
+  bookings             Booking[]
+  lessonInstances      LessonInstance[]
+  recurringRules       RecurringLessonRule[]
+  payouts              ProviderPayout[]
+  subscription         Subscription?
+  studentNotes         StudentNote[]
+
+  @@index([city, district])
+  @@index([plan, published])
+  @@map("providers")
+}
+
+model ProviderCategory {
+  providerId String
+  categoryId String
+  provider   Provider          @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  category   EducationCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([providerId, categoryId])
+  @@map("provider_categories")
+}
+
+// ─────────────── Listings (lessons & packages) ───────────────
+
+model Listing {
+  id            String        @id @default(cuid())
+  providerId    String
+  categoryId    String?
+  kind          ListingKind   @default(SINGLE_LESSON)
+  status        ListingStatus @default(DRAFT)
+  title         String
+  description   String?
+  priceAmount   Int // minor units
+  currency      String        @default("TRY")
+  durationMin   Int           @default(60)
+  lessonCount   Int           @default(1) // >1 for packages
+  deliveryMode  DeliveryMode  @default(BOTH)
+  packageTerms  String?
+  activatedAt   DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  provider Provider          @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  category EducationCategory? @relation(fields: [categoryId], references: [id])
+  bookings Booking[]
+
+  @@index([providerId, status])
+  @@map("listings")
+}
+
+// ─────────────────────── Availability ────────────────────────
+
+model AvailabilitySlot {
+  id         String   @id @default(cuid())
+  providerId String
+  startsAt   DateTime
+  endsAt     DateTime
+  isBooked   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  provider Provider  @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  booking  Booking?
+
+  @@index([providerId, startsAt])
+  @@map("availability_slots")
+}
+
+// Premium: weekly template + bulk generation
+model AvailabilityTemplate {
+  id         String   @id @default(cuid())
+  providerId String
+  weekday    Int // 0-6, Monday=0
+  startTime  String // "14:00"
+  endTime    String // "15:00"
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@map("availability_templates")
+}
+
+// ──────────────── Students / clients (CRM) ───────────────────
+
+model StudentProfile {
+  id          String        @id @default(cuid())
+  providerId  String
+  userId      String? // linked platform account when the student has one
+  fullName    String
+  email       String?
+  phone       String?
+  status      StudentStatus @default(ACTIVE)
+  labelColor  String? // Premium: student colors/labels
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  provider        Provider         @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  user            User?            @relation(fields: [userId], references: [id])
+  bookings        Booking[]
+  lessonInstances LessonInstance[]
+  notes           StudentNote[]
+  recurringRules  RecurringLessonRule[]
+  packageCredits  PackageCredit[]
+
+  @@index([providerId, status])
+  @@map("student_profiles")
+}
+
+model StudentNote {
+  id         String   @id @default(cuid())
+  studentId  String
+  providerId String
+  body       String
+  createdAt  DateTime @default(now())
+
+  student  StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  provider Provider       @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@map("student_notes")
+}
+
+// ─────────────────────── Bookings ────────────────────────────
+
+model Booking {
+  id             String        @id @default(cuid())
+  reference      String        @unique @default(cuid())
+  providerId     String
+  listingId      String
+  studentUserId  String?
+  studentProfileId String?
+  availabilitySlotId String?   @unique
+  status         BookingStatus @default(PENDING_PAYMENT)
+  scheduledAt    DateTime?
+  grossAmount    Int
+  currency       String        @default("TRY")
+  cancellationPolicy String?
+  idempotencyKey String?       @unique
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  provider        Provider          @relation(fields: [providerId], references: [id])
+  listing         Listing           @relation(fields: [listingId], references: [id])
+  studentUser     User?             @relation("StudentBookings", fields: [studentUserId], references: [id])
+  studentProfile  StudentProfile?   @relation(fields: [studentProfileId], references: [id])
+  availabilitySlot AvailabilitySlot? @relation(fields: [availabilitySlotId], references: [id])
+  payment         Payment?
+  packageCredit   PackageCredit?
+  lessonInstances LessonInstance[]
+
+  @@index([providerId, status])
+  @@index([studentUserId, status])
+  @@map("bookings")
+}
+
+// ─────────────────── Payments & money ────────────────────────
+
+model Payment {
+  id               String        @id @default(cuid())
+  bookingId        String        @unique
+  status           PaymentStatus @default(REQUIRES_PAYMENT)
+  provider         String        @default("mock")
+  providerRef      String?
+  currency         String        @default("TRY")
+  grossAmount      Int
+  platformCommission Int         @default(0) // Apoindar marketplace commission
+  commissionRate   Float         @default(0) // effective rate captured at authorization
+  processorFee     Int           @default(0) // payment-provider cost (separate from commission)
+  providerNet      Int           @default(0)
+  refundedAmount   Int           @default(0)
+  authorizedAt     DateTime?
+  succeededAt      DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  booking  Booking          @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  attempts PaymentAttempt[]
+  refunds  Refund[]
+  payoutItems PayoutItem[]
+
+  @@map("payments")
+}
+
+model PaymentAttempt {
+  id           String               @id @default(cuid())
+  paymentId    String
+  status       PaymentAttemptStatus @default(CREATED)
+  amount       Int
+  provider     String               @default("mock")
+  providerRef  String?
+  failureCode  String?
+  failureMessage String?
+  idempotencyKey String?            @unique
+  createdAt    DateTime             @default(now())
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId, status])
+  @@map("payment_attempts")
+}
+
+model Refund {
+  id          String       @id @default(cuid())
+  paymentId   String
+  amount      Int
+  reason      String?
+  status      RefundStatus @default(PENDING)
+  providerRef String?
+  createdAt   DateTime     @default(now())
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@map("refunds")
+}
+
+model ProviderPayout {
+  id          String       @id @default(cuid())
+  providerId  String
+  status      PayoutStatus @default(PENDING)
+  currency    String       @default("TRY")
+  amount      Int
+  periodStart DateTime
+  periodEnd   DateTime
+  paidAt      DateTime?
+  createdAt   DateTime     @default(now())
+
+  provider Provider     @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  items    PayoutItem[]
+
+  @@index([providerId, status])
+  @@map("provider_payouts")
+}
+
+model PayoutItem {
+  id        String   @id @default(cuid())
+  payoutId  String
+  paymentId String
+  amount    Int
+  createdAt DateTime @default(now())
+
+  payout  ProviderPayout @relation(fields: [payoutId], references: [id], onDelete: Cascade)
+  payment Payment        @relation(fields: [paymentId], references: [id])
+
+  @@unique([payoutId, paymentId])
+  @@map("payout_items")
+}
+
+// commission is configuration-driven; rows here allow overrides + audit
+model CommissionRule {
+  id         String       @id @default(cuid())
+  plan       ProviderPlan @unique
+  rate       Float // 0.12 / 0.07
+  currency   String       @default("TRY")
+  effectiveFrom DateTime  @default(now())
+  createdAt  DateTime     @default(now())
+
+  @@map("commission_rules")
+}
+
+// ─────────────── Subscriptions & entitlements ────────────────
+
+model Subscription {
+  id                 String             @id @default(cuid())
+  providerId         String             @unique
+  status             SubscriptionStatus @default(TRIALING)
+  interval           BillingInterval    @default(MONTH)
+  priceAmount        Int // 29900 or 299000
+  currency           String             @default("TRY")
+  trialStartedAt     DateTime?
+  trialEndsAt        DateTime?
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  cancelAtPeriodEnd  Boolean            @default(false)
+  cancelledAt        DateTime?
+  provider_ref       String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  provider     Provider                  @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  entitlements SubscriptionEntitlement[]
+
+  @@map("subscriptions")
+}
+
+// snapshot of what the plan grants, so entitlement checks never trust client state
+model SubscriptionEntitlement {
+  id             String   @id @default(cuid())
+  subscriptionId String
+  key            String // e.g. "listings.maxActive", "students.maxActive", "calendar.recurring"
+  value          String // "1" | "unlimited" | "true" | "false"
+  createdAt      DateTime @default(now())
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@unique([subscriptionId, key])
+  @@map("subscription_entitlements")
+}
+
+// ─────────────── Education: calendar & packages ──────────────
+
+model RecurringLessonRule {
+  id          String              @id @default(cuid())
+  providerId  String
+  studentId   String
+  listingId   String?
+  frequency   RecurrenceFrequency @default(WEEKLY)
+  weekday     Int
+  startTime   String // "14:00"
+  durationMin Int                 @default(60)
+  startDate   DateTime
+  occurrences Int // e.g. 8 weeks
+  active      Boolean             @default(true)
+  createdAt   DateTime            @default(now())
+
+  provider Provider         @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  student  StudentProfile   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  lessons  LessonInstance[]
+
+  @@map("recurring_lesson_rules")
+}
+
+model LessonInstance {
+  id                String               @id @default(cuid())
+  providerId        String
+  studentId         String?
+  bookingId         String?
+  recurringRuleId   String?
+  startsAt          DateTime
+  endsAt            DateTime
+  status            LessonInstanceStatus @default(SCHEDULED)
+  createdAt         DateTime             @default(now())
+
+  provider      Provider             @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  student       StudentProfile?      @relation(fields: [studentId], references: [id])
+  booking       Booking?             @relation(fields: [bookingId], references: [id])
+  recurringRule RecurringLessonRule? @relation(fields: [recurringRuleId], references: [id], onDelete: SetNull)
+
+  @@index([providerId, startsAt])
+  @@map("lesson_instances")
+}
+
+// tracks lessons purchased vs consumed for a package booking
+model PackageCredit {
+  id             String   @id @default(cuid())
+  bookingId      String   @unique
+  studentId      String?
+  purchasedCount Int
+  consumedCount  Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  booking Booking         @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  student StudentProfile? @relation(fields: [studentId], references: [id])
+
+  @@map("package_credits")
+}
+
+// ─────────────────── Admin / supporting ──────────────────────
+
+model Complaint {
+  id          String           @id @default(cuid())
+  reporterId  String
+  subjectType String // "provider" | "booking" | "listing"
+  subjectId   String
+  reason      String
+  status      ModerationStatus @default(PENDING)
+  createdAt   DateTime         @default(now())
+
+  reporter User @relation("ComplaintReporter", fields: [reporterId], references: [id])
+
+  @@map("complaints")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  kind      String
+  title     String
+  body      String?
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@map("notifications")
+}
