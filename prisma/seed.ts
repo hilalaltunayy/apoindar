@@ -71,6 +71,8 @@ interface ProviderSpec {
   years: number;
   premium: boolean;
   mode: "ONLINE" | "IN_PERSON" | "BOTH";
+  /** Public path under /public — provider profile/card image. */
+  photo?: string;
   listings: {
     kind: "SINGLE_LESSON" | "PACKAGE";
     title: string;
@@ -95,6 +97,7 @@ const PROVIDERS: ProviderSpec[] = [
     years: 9,
     premium: true,
     mode: "BOTH",
+    photo: "/demo/providers/math-1.png",
     listings: [
       { kind: "SINGLE_LESSON", title: "Birebir matematik dersi", description: "Öğrencinin seviyesine göre planlanan özel ders.", price: 450, durationMin: 60, lessonCount: 1 },
       { kind: "PACKAGE", title: "8 derslik LGS matematik paketi", description: "Konu anlatımı, soru çözümü ve haftalık mini deneme.", price: 3200, durationMin: 60, lessonCount: 8, terms: "3 ay içinde kullanılmalı" },
@@ -159,6 +162,7 @@ const PROVIDERS: ProviderSpec[] = [
     years: 7,
     premium: false,
     mode: "IN_PERSON",
+    photo: "/demo/providers/swimming-1.png",
     listings: [
       { kind: "SINGLE_LESSON", title: "Birebir yüzme dersi", description: "Havuzda özel ders, tüm ekipman dahil.", price: 550, durationMin: 45, lessonCount: 1 },
     ],
@@ -174,6 +178,7 @@ const PROVIDERS: ProviderSpec[] = [
     years: 10,
     premium: true,
     mode: "IN_PERSON",
+    photo: "/demo/providers/tennis-1.png",
     listings: [
       { kind: "SINGLE_LESSON", title: "Birebir tenis dersi", description: "Kort ve raket dahil, seviyeye göre teknik çalışma.", price: 600, durationMin: 60, lessonCount: 1 },
       { kind: "PACKAGE", title: "8 derslik başlangıç paketi", description: "Temel vuruşlar, ayak çalışması ve maç pratiği.", price: 4400, durationMin: 60, lessonCount: 8, terms: "2 ay içinde kullanılmalı" },
@@ -296,12 +301,14 @@ async function seedDemo() {
         published: true,
         onboardingStep: 9,
         startingPrice: cheapest,
+        photoUrl: spec.photo ?? null,
       },
       update: {
         plan: spec.premium ? "PREMIUM" : "FREE",
         published: true,
         moderationStatus: "APPROVED",
         startingPrice: cheapest,
+        photoUrl: spec.photo ?? null,
       },
     });
 
@@ -326,27 +333,35 @@ async function seedDemo() {
       });
     }
 
-    // Listings
-    await prisma.listing.deleteMany({ where: { providerId: provider.id } });
+    // Listings — idempotent by (providerId, title); never delete listings that
+    // already have bookings (RESTRICT fk).
+    await prisma.listing.deleteMany({
+      where: { providerId: provider.id, bookings: { none: {} }, title: { notIn: spec.listings.map((l) => l.title) } },
+    });
     const createdListings = [];
     for (const l of spec.listings) {
+      const existing = await prisma.listing.findFirst({
+        where: { providerId: provider.id, title: l.title },
+        select: { id: true },
+      });
+      const data = {
+        providerId: provider.id,
+        categoryId: catId[spec.cats[0]!],
+        kind: l.kind,
+        status: (l.draft ? "DRAFT" : "ACTIVE") as "DRAFT" | "ACTIVE",
+        activatedAt: l.draft ? null : new Date(),
+        title: l.title,
+        description: `${l.description} ${DEMO_TAG}`,
+        priceAmount: l.price * t,
+        durationMin: l.durationMin,
+        lessonCount: l.lessonCount,
+        deliveryMode: spec.mode,
+        packageTerms: l.terms ?? null,
+      };
       createdListings.push(
-        await prisma.listing.create({
-          data: {
-            providerId: provider.id,
-            categoryId: catId[spec.cats[0]!],
-            kind: l.kind,
-            status: l.draft ? "DRAFT" : "ACTIVE",
-            activatedAt: l.draft ? null : new Date(),
-            title: l.title,
-            description: `${l.description} ${DEMO_TAG}`,
-            priceAmount: l.price * t,
-            durationMin: l.durationMin,
-            lessonCount: l.lessonCount,
-            deliveryMode: spec.mode,
-            packageTerms: l.terms ?? null,
-          },
-        }),
+        existing
+          ? await prisma.listing.update({ where: { id: existing.id }, data })
+          : await prisma.listing.create({ data }),
       );
     }
 
